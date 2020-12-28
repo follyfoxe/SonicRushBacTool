@@ -1,0 +1,198 @@
+Sonic Rush BAC Format
+By Justin Aquadro (Retriever II)
+
+This document is incomplete and is not 100% accurate
+Please send additions, corrections to jaquadro@taloncrossing.com
+Last Updated: 7/19/06 @ 2:49AM EDT
+
+Byte Order: Little Endian
+
+------------------------------------------------------------------------------------------------
+BLOCK HIERARCHY
+
+                +-------+       +-------+
+                |BLOCK 2|+ . . .|BLOCK 1|+
+                +-------+|      +-------+|
+                 +--|----+       +-------+
+                    |
+                    |
+                +-------+
+                |BLOCK 3|
+                +-------+
+                    |
+    +---------------+---------------+
+    |               |               |
++-------+       +-------+       +-------+
+|BLOCK 4|       |BLOCK 5|       |BLOCK 6|+
++-------+       +-------+       +-------+|
+                                 +-------+
+
+------------------------------------------------------------------------------------------------
+Header Block
+ADDR            SIZE    DESCRIPTION
+0x0000          4       Header: BAC\x0A
+0x0004          4u      Address Block 2
+0x0008          4u      Address Block 3
+0x000C          4u      Address Block 4
+0x0010          4u      Address Block 5
+0x0014          4u      Address Block 6
+0x0018          4u      Address Block 1? (Constant: 0x1C)
+
+------------------------------------------------------------------------------------------------
+Block 1 (Global Sprite Data? / Animation Sets?)
+ADDR            SIZE    DESCRIPTION
+0x0000          4u      Size of block
+0x0004          2u      Number Block 2s, Number SubBlock 1s in Block 1
+0x0006          2       Unknown (defaults?)
+0x0008          2       Unknown (defaults?)
+0x000A          2       Unknown (defaults?)
+0x000C          2       Unknown (defaults?)
+0x000E          2       Unknown (defaults?)
+0x0010          2       Unknown (defaults?)
+0x0012          2       Unknown (defaults?)
+0x0014          2       Unknown (-1)
+0x0016          2       Unknown (always 0?)
+0x0018          2       Unknown (always 0?)
+0x001A          2       Unknown (always 0?)
+|
+| SubBlock 1 (Animation Set?)
+| 0x0000        2       Unknown
+| 0x0002        2       Unknown
+| 0x0004        2       Unknown
+| 0x0006        2       Unknown
+| 0x0008        2       Unknown
+| 0x000A        2       Unknown
+| 0x000E        2       Unknown
+| 0x000C        2       Unknown
+| 0x0010        2       Unknown (always 0?)
+| 0x0012        2       Unknown (always 0?)
+
+------------------------------------------------------------------------------------------------
+Block 2 (Animation Set Mappings?)
+ADDR            SIZE    DESCRIPTION
+0x0000          4u      Size of block
+|
+| SubBlock 1 (Single Mapping?)
+| 0x0000        4u      Offset into Block 3
+| 0x0004        4u      Unknown (always 0?)
+
+------------------------------------------------------------------------------------------------
+Block 3 (Animation Frames / Set)
+ADDR            SIZE    DESCRIPTION
+0x0000          4u      Size of block
+|
+| SubBlock 1 (Single Frame)*
+| 0x0000        2       ID 01: Frame Offsets
+| 0x0002        2       Length of Frame Offsets SSB, plus ID
+| |
+| | SubSubBlock 1 (Frame Offsets)
+| | 0x0000      4u      Offset into Block 4 (Frame Data)
+| |
+| 0x0004        2       ID 02: Image Parts
+| 0x0006        2       Length of Image Part SubSubBlocks, plus ID
+| |
+| | SubSubBlock 2 (Image Parts)
+| | 0x0000      4u      Offset into Block 6 (Image Data)
+| | 0x0004      4u      Data Size Block 6 / 0x20?
+| |
+| 0x0008        2       ID 03: Palettes
+| 0x000A        2       Length of Palette SubSubBlocks, plus ID
+| |
+| | SubSubBlock 3 (Palettes)
+| | 0x0000      4u      Offset into Block 5 (Palette Data)
+| | 0x0004      4u      Number colors in palette?
+| |
+| 0x000E        2       ID 07: Unknown Purpose
+| 0x000C        2       Length of Unknown Purpose SubSubBlocks, plus ID
+| |
+| | SubSubBlock 4 (Alternate Bounadaries / Collision Masks?  Usually not present)
+| | 0x0000      4       Index (for external identification?)
+| | 0x0004      2       Alternate Boundary X-Coordinate Left Edge?
+| | 0x0006      2       Alternate Boundary Y-Coordinate Top Edge?
+| | 0x0008      2       Alternate Boundary X-Coordinate Right Edge?
+| | 0x000A      2       Alternate Boundary Y-Coordinate Bottom Edge?
+| |
+| 0x0010	2	ID 00: Animation Info
+| 0x0012	2	Length of Animation Info SubSubBlocks, plus ID
+| |
+| | SubSubBlock 5 (Animation Info)
+| | 0x0000      2       Number frames in Set
+| | 0x0002      2       Frame Index
+| | 0x0004      4       Duration of frame in time units?
+|
+0x0004          2       ID 04: Resting/default frame?
+0x0006          2       Length of resting frame data, plus ID?
+0x0008          4u      Offset to one of the frame SubBlocks, usually the first (resting frame?)
+
+*  There is no gaurentee that any ID/length pair and its corresponding SSB will be present in a
+   given frame.
+
+------------------------------------------------------------------------------------------------
+Block 4 (Frame Assembly)
+ADDR            SIZE    DESCRIPTION
+0x0000          4u      Size of block
+|
+| SubBlock 1 (Single Frame Assembly)
+| 0x0000        4u      Number image parts in frame (parts specified in animation frame)
+| 0x0004        2       X-Coordinate Left Edge
+| 0x0006        2       Y-Coordinate Top Edge
+| 0x0008        2       X-Coordinate Right Edge
+| 0x000A        2       Y-Coordinate Bottom Edge
+| 0x000C        2       Hot Spot X-Coordinate
+| 0x000E        2       Hot Spot Y-Coordinate
+| |
+| | SubSubBlock 1 (Image Part Coordinate Offsets)
+| | 0x0000      1       Y-Coordinate Offset from Top Edge
+| | 0x0001      1       Unknown
+| | 0x0002      1       X-Coordinate Offset from Left Edge
+| | 0x0003      1       Unknown
+| | 0x0004      2       Unknown
+| | 0x0006      2       Unknown
+        
+------------------------------------------------------------------------------------------------
+Block 5 (Palettes)
+ADDR            SIZE    DESCRIPTION
+0x0000          4u      Size of block
+|
+| SubBlock 1 (Single Palette)
+| 0x0000        1       Unknown (type?)
+| 0x0001        3       Size of palette
+| |
+| | SubSubBlock 1 (Palette Entry)
+| | 0x0000      2       Palette Entry, 4bpp
+
+------------------------------------------------------------------------------------------------
+Block 6 (Image Data)
+ADDR            SIZE    DESCRIPTION
+0x0000          4u      Size of block
+|
+| SubBlock 1 (Single Image Part)
+| 0x0000        1       Compression? (0x00=Uncompressed, 0x10=LZSS)
+| 0x0001        3       Size of data region
+| |
+| | SubSubBlock 1 (Pixel Pair)
+| | 0x0000      1       Pixel Pairs
+| |
+| 0x0004-7      1-4     Terminator (-1) (Padding? 1-4 bytes?)
+
+------------------------------------------------------------------------------------------------
+NOTES:
+To save data, some images with larger regions of empty space are broken apart into multiple images,
+and combined after.  These are the frames that have extra long Block 4 sub-blocks.
+
+All frames use a Hot Spot from which the dimentions of the frame are calculated.  Image parts are laid
+down according to pixel offsets from the top and left edges of the frame.  It would appear that
+image part dimentions are calculated by filling in to the right and bottom until the other frame
+edges are encountered or other allocated space is encountered.  This could be problematic for some
+placements, but tile constraints could make this possible.
+
+------------------------------------------------------------------------------------------------
+"UNUSUAL" FILES
+
+ac_sonic.bac (No palette/data B3:SSBs)
+dm_stdm_jpn.bac (Missing some data B3:SSBs)
+
+------------------------------------------------------------------------------------------------
+CREDIT:
+Contributer             Identifications
+Techokami               Compression byte in Image Data
