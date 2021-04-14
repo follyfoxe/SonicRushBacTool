@@ -6,7 +6,7 @@ using System.Drawing.Imaging;
 using Ekona;
 using Ekona.Images;
 
-namespace BacConvert
+namespace BacConvert//test
 {
     class Program
     {
