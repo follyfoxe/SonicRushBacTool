@@ -6,10 +6,12 @@ using System.Drawing.Imaging;
 using Ekona;
 using Ekona.Images;
 
-namespace BacConvert//test
+namespace BacConvert
 {
     class Program
     {
+        const string outFolder = "out/";
+
         const int attr_0_square = (0 << 14);
         const int attr_0_wide = (1 << 14);
         const int attr_0_tall = (2 << 14);
@@ -22,10 +24,12 @@ namespace BacConvert//test
         {
             if (args.Length < 1)
             {
-                Console.WriteLine("no file");
+                Console.WriteLine("No file, please drag a file to the executable.");
                 Console.ReadKey();
                 return;
             }
+
+            Directory.CreateDirectory(outFolder);
 
             Console.WriteLine("started");
 
@@ -51,6 +55,12 @@ namespace BacConvert//test
                 stream.Position = block2;
                 block_size = reader.ReadUInt32();
                 if (block_size == frames_count * 8 + 4) Console.WriteLine("Block2: OK");
+                else
+                {
+                    frames_count = (ushort)((block_size - 4) / 8);
+                    Console.WriteLine("Block2: Has incorrect data, fixing frame_count...");
+                }
+
                 uint[] anim_offs = new uint[frames_count];
                 //Get subblock offsets (position relative to block2's position)
                 for (int i = 0; i < frames_count; i++)
@@ -105,42 +115,61 @@ namespace BacConvert//test
                     subimage_offs[frame_index] = new List<List<uint>>();
                     subframe_offs[frame_index] = new List<uint>();
 
-                    while (stream.Position < block4) //keep reading until ID 04
+                    try
                     {
-                        block_id = reader.ReadUInt16();
-                        block_size = reader.ReadUInt16();
+                        while (stream.Position < block4) //keep reading until ID 04
+                        {
+                            block_id = reader.ReadUInt16();
+                            block_size = reader.ReadUInt16();
 
-                        if (block_id == 1)
-                        {
-                            uint subframe_off_count = (block_size - 4) / 4;
-                            if (subframe_off_count != 0)
-                                subframe_offs[frame_index].Add(reader.ReadUInt32());
-                        }
-                        else if (block_id == 2)
-                        {
-                            uint subimage_part_count = (block_size - 4) / 8;
-                            List<uint> subimage = new List<uint>();
-                            for (int i = 0; i < subimage_part_count; i++)
+                            if (block_id == 1)
                             {
-                                subimage.Add(reader.ReadUInt32());
-                                reader.ReadUInt32();
+                                uint subframe_off_count = (block_size - 4) / 4;
+                                if (subframe_off_count != 0)
+                                    subframe_offs[frame_index].Add(reader.ReadUInt32());
                             }
-                            subimage_offs[frame_index].Add(subimage);
-                            Console.WriteLine("Found {0} Subframe parts in Frame {1}, Subframes are a work in progress", subimage_part_count, frame_index);
+                            else if (block_id == 2)
+                            {
+                                uint subimage_part_count = (block_size - 4) / 8;
+                                List<uint> subimage = new List<uint>();
+                                for (int i = 0; i < subimage_part_count; i++)
+                                {
+                                    subimage.Add(reader.ReadUInt32());
+                                    reader.ReadUInt32();
+                                }
+                                subimage_offs[frame_index].Add(subimage);
+                                Console.WriteLine("Found {0} Subframe parts in Frame {1}, Subframes are a work in progress", subimage_part_count, frame_index);
+                            }
+                            else if (block_id == 4)
+                                break;
+                            else
+                                stream.Position += block_size - 4;
                         }
-                        else if (block_id == 4)
-                            break;
-                        else
-                            stream.Position += block_size - 4;
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("Breaking out of the loop due to: " + e);
+                        break;
                     }
                 }
 
                 //Palletes
                 for (int i = 0; i < palette_offs.Length; i++) //Iterate through each frame
                 {
+                    if (palette_offs[i] == null)
+                    {
+                        Console.WriteLine("Pallete Offset was null! breaking out of the loop...");
+                        break;
+                    }
                     for (int j = 0; j < palette_offs[i].Count; j++) //Iterate through each frame palletes
                     {
-                        stream.Position = block5 + palette_offs[i][j];
+                        uint pos = block5 + palette_offs[i][j];
+                        if (pos < 0 || pos > stream.Length)
+                        {
+                            Console.WriteLine("Pallete Data was out of bounds! breaking out of the loop...");
+                            break;
+                        }
+                        stream.Position = pos;
 
                         uint pal_length = reader.ReadUInt32();
                         uint unknown = pal_length & 0xFF;
@@ -159,6 +188,12 @@ namespace BacConvert//test
                 }
 
                 Console.WriteLine("Found {0} palettes", palettes.Count);
+                if (palettes.Count < 1)
+                {
+                    Console.WriteLine("Found no palettes, thus no data.");
+                    Console.ReadKey();
+                    return;
+                }
 
                 //Tile data
                 for (int i = 0; i < image_offs.Length; i++)
@@ -200,7 +235,7 @@ namespace BacConvert//test
                         g.DrawImage(bmp, xpos, ypos);
                     }
                     g.Dispose();
-                    res.Save("Frame" + i + ".png");
+                    res.Save(outFolder + "Frame" + i + ".png");
                 }
 
                 /*for (int i = 0; i < subimage_offs.Length; i++)
@@ -273,7 +308,7 @@ namespace BacConvert//test
                         }
 
                         g.Dispose();
-                        res.Save("Frame" + i + "_SubFrame" + j + ".png");
+                        res.Save(outFolder + "Frame" + i + "_SubFrame" + j + ".png");
                     }
                 }
             }
