@@ -6,6 +6,8 @@ using System.Drawing;
 using System.Windows.Forms;
 using RushBacLib;
 
+using System.IO;
+
 namespace RushBacTool
 {
     public partial class MainForm : Form
@@ -38,7 +40,7 @@ namespace RushBacTool
             ResetControls();
             DisposeBitmaps();
 
-            fileName = System.IO.Path.GetFileName(path);
+            fileName = Path.GetFileName(path);
             Text = $"Rush Bac Tool [{fileName}]";
 
             Console.WriteLine("Begin load BAC {0}", fileName);
@@ -49,6 +51,30 @@ namespace RushBacTool
 
             CacheBitmaps();
             CreateTree();
+        }
+
+        void ExportAll(string path)
+        {
+            Console.WriteLine("Begin Export All {0}", fileName);
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            Directory.CreateDirectory(path);
+
+            for (int i = 0; i < bitmaps.Length; i++)
+            {
+                Bitmap[] frames = bitmaps[i];
+
+                string dir = Path.Combine(path, "Animation " + i);
+                Directory.CreateDirectory(dir);
+
+                for (int j = 0; j < frames.Length; j++)
+                    frames[j].Save(Path.Combine(dir, "Frame " + j + ".png"));
+            }
+
+            stopwatch.Stop();
+            Console.WriteLine("Finished Exporting in {0} ms.\n", stopwatch.ElapsedMilliseconds);
+
+            MessageBox.Show("Export Finished!");
         }
 
         void ResetControls()
@@ -129,6 +155,18 @@ namespace RushBacTool
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                     LoadBac(dialog.FileName);
+            }
+        }
+
+        void exportAllToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (bacFile == null)
+                return;
+
+            using (SaveFileDialog dialog = new SaveFileDialog { Title = "Select an output Folder.", FileName = "out" })
+            {
+                if (dialog.ShowDialog() == DialogResult.OK)
+                    ExportAll(dialog.FileName);
             }
         }
     }
