@@ -26,8 +26,6 @@ namespace RushBacTool
         {
             InitializeComponent();
             Disposed += OnDisposed;
-
-            //LoadBac(@"C:\Users\ACER\Desktop\dsi3dsStuff\DS\SonicRush\ac_eff_boost.bac");
         }
 
         void OnDisposed(object sender, EventArgs e)
