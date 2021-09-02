@@ -2,7 +2,7 @@
 A tool for converting sonic rush .bac files to pngs.
 
 # Usage
-Go head over to the new wiki!
+Go head over to the [new wiki!](https://github.com/chor64/Sonic-Rush-Bac-Tool/wiki)
 
 # Compatability
 I've tested it with some Sonic Rush's bac files and it seems to work fine.<br>
