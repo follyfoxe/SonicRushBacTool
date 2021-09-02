@@ -1,5 +1,6 @@
 # Sonic Rush BAC Tool
-A tool for converting sonic rush .bac files to pngs.
+A tool for converting sonic rush .bac files to pngs.<br>
+The bac file format specs can be found [here.](https://www.romhacking.net/documents/669/)
 
 # Usage
 Go head over to the [new wiki!](https://github.com/chor64/Sonic-Rush-Bac-Tool/wiki)
