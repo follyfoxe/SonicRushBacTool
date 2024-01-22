@@ -47,13 +47,13 @@ namespace RushBacTool
                 previewBox.Image = mainForm.bitmaps[AnimIndex][currentFrame];
         }
 
-        void frameUpDown_ValueChanged(object sender, EventArgs e)
+        void FrameUpDown_ValueChanged(object sender, EventArgs e)
         {
             currentFrame = (int)frameUpDown.Value;
             UpdatePreview();
         }
 
-        void animTimer_Tick(object sender, EventArgs e)
+        void AnimTimer_Tick(object sender, EventArgs e)
         {
             if (currentFrame < Animation.frames.Count - 1)
                 currentFrame++;
@@ -74,7 +74,7 @@ namespace RushBacTool
             animTimer.Stop();
         }
 
-        void playButton_Click(object sender, EventArgs e) => Play();
-        void stopButton_Click(object sender, EventArgs e) => Stop();
+        void PlayButton_Click(object sender, EventArgs e) => Play();
+        void StopButton_Click(object sender, EventArgs e) => Stop();
     }
 }
