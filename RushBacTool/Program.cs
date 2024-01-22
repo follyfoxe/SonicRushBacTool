@@ -1,5 +1,4 @@
-﻿using System;
-using System.Windows.Forms;
+﻿using System.Windows.Forms;
 
 namespace RushBacTool
 {
@@ -8,7 +7,7 @@ namespace RushBacTool
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
-        [STAThread]
+        [System.STAThread]
         static void Main(string[] args)
         {
             Application.EnableVisualStyles();

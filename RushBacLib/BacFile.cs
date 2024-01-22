@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Text;
 
 namespace RushBacLib
 {
@@ -16,7 +15,7 @@ namespace RushBacLib
         public BacFile(Stream stream)
         {
             //Format is Little Indian
-            BinaryReader reader = new BinaryReader(stream, Encoding.UTF8);
+            BinaryReader reader = new BinaryReader(stream, System.Text.Encoding.UTF8);
 
             Header = new Header(reader);
             Console.WriteLine(Header.headerString);
