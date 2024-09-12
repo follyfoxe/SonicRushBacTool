@@ -21,7 +21,7 @@ namespace RushBacTool
             AnimIndex = animIndex;
             FrameIndex = frameIndex;
 
-            previewBox.Image = form.bitmaps[animIndex][frameIndex];
+            previewBox.Image = form.Bitmaps[animIndex][frameIndex];
         }
     }
 }

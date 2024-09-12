@@ -1,18 +1,15 @@
 ﻿using RushBacLib;
-using System;
-using System.Windows.Forms;
 
 namespace RushBacTool
 {
     public partial class AnimFrameControl : UserControl
     {
         public int AnimIndex { get; }
-        public AnimationFrame Animation { get; }
+        public AnimationFrames Animation { get; }
+        readonly MainForm _mainForm;
 
-        readonly MainForm mainForm;
-
-        int currentFrame;
-        bool disposed;
+        int _currentFrame;
+        bool _disposed;
 
         public AnimFrameControl()
         {
@@ -25,53 +22,59 @@ namespace RushBacTool
         {
             Stop();
             animTimer.Dispose();
-            disposed = true;
+            _disposed = true;
         }
 
         public AnimFrameControl(MainForm form, int animIndex) : this()
         {
-            mainForm = form;
+            _mainForm = form;
             AnimIndex = animIndex;
 
-            Animation = form.bacFile.AnimationFrames[animIndex];
-            frameUpDown.Maximum = Animation.frames.Count - 1;
+            Animation = form.BacFile.AnimationFrames[animIndex];
+            frameUpDown.Maximum = Animation.Frames.Count - 1;
 
             titleLabel.Text += " " + animIndex;
 
+            //SetFrame((int)Animation.RestingFrame);
             UpdatePreview();
+        }
+
+        void SetFrame(int index)
+        {
+            _currentFrame = index;
+            frameUpDown.Value = index;
         }
 
         void UpdatePreview()
         {
-            if (!disposed)
-                previewBox.Image = mainForm.bitmaps[AnimIndex][currentFrame];
+            if (!_disposed)
+                previewBox.Image = _mainForm.Bitmaps[AnimIndex][_currentFrame];
         }
 
         void FrameUpDown_ValueChanged(object sender, EventArgs e)
         {
-            currentFrame = (int)frameUpDown.Value;
+            _currentFrame = (int)frameUpDown.Value;
+            //Trace.WriteLine($"FrameY: {Animation.Frames[_currentFrame].FrameAssembly.FrameY}, HotSpotY: {Animation.Frames[_currentFrame].FrameAssembly.HotSpotY}");
             UpdatePreview();
         }
 
         void AnimTimer_Tick(object sender, EventArgs e)
         {
-            if (currentFrame < Animation.frames.Count - 1)
-                currentFrame++;
-            else
-                currentFrame = 0;
-
-            frameUpDown.Value = currentFrame;
+            _currentFrame++;
+            _currentFrame %= Animation.Frames.Count;
+            frameUpDown.Value = _currentFrame;
         }
 
         void Play()
         {
-            currentFrame = 0;
+            SetFrame(0);
             animTimer.Start();
         }
 
         void Stop()
         {
             animTimer.Stop();
+            //SetFrame((int)Animation.RestingFrame);
         }
 
         void PlayButton_Click(object sender, EventArgs e) => Play();

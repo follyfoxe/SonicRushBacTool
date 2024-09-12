@@ -1,29 +1,27 @@
 ﻿using RushBacLib;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Windows.Forms;
 
 namespace RushBacTool
 {
     public partial class MainForm : Form
     {
-        public BacFile bacFile;
-        public Bitmap[][] bitmaps;
-        string fileName;
+        public BacFile BacFile;
+        public Bitmap[][] Bitmaps;
+
+        readonly string _baseTitle;
+        string _openedFileName;
+
+        public MainForm()
+        {
+            InitializeComponent();
+            _baseTitle = Text;
+            Disposed += OnDisposed;
+        }
 
         public MainForm(string[] args) : this()
         {
             if (args.Length > 0)
                 LoadBac(args[0]);
-        }
-
-        public MainForm()
-        {
-            InitializeComponent();
-            Disposed += OnDisposed;
         }
 
         void OnDisposed(object sender, EventArgs e)
@@ -33,32 +31,32 @@ namespace RushBacTool
 
         void LoadBac(string path)
         {
+            _openedFileName = Path.GetFileName(path);
+            Text = $"{_baseTitle} [{_openedFileName}]";
+
             ResetControls();
             DisposeBitmaps();
 
-            fileName = Path.GetFileName(path);
-            Text = $"Rush Bac Tool [{fileName}]";
+            Trace.WriteLine($"Begin load {_openedFileName}");
+            Stopwatch sw = Stopwatch.StartNew();
 
-            Console.WriteLine("Begin load BAC {0}", fileName);
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            bacFile = new BacFile(path);
-            stopwatch.Stop();
-            Console.WriteLine("Finished loading BAC in {0} ms.\n", stopwatch.ElapsedMilliseconds);
-
+            BacFile = new BacFile(path);
             CacheBitmaps();
             CreateTree();
+
+            sw.Stop();
+            Trace.WriteLine($"Finished loading in {sw.ElapsedMilliseconds} ms.\n");
         }
 
         void ExportAll(string path)
         {
-            Console.WriteLine("Begin Export All {0}", fileName);
-            Stopwatch stopwatch = Stopwatch.StartNew();
+            Trace.WriteLine($"Begin export all {_openedFileName}");
+            Stopwatch sw = Stopwatch.StartNew();
 
             Directory.CreateDirectory(path);
-
-            for (int i = 0; i < bitmaps.Length; i++)
+            for (int i = 0; i < Bitmaps.Length; i++)
             {
-                Bitmap[] frames = bitmaps[i];
+                Bitmap[] frames = Bitmaps[i];
 
                 string dir = Path.Combine(path, "Animation " + i);
                 Directory.CreateDirectory(dir);
@@ -67,8 +65,8 @@ namespace RushBacTool
                     frames[j].Save(Path.Combine(dir, "Frame " + j + ".png"));
             }
 
-            stopwatch.Stop();
-            Console.WriteLine("Finished Exporting in {0} ms.\n", stopwatch.ElapsedMilliseconds);
+            sw.Stop();
+            Trace.WriteLine($"Finished exporting in {sw.ElapsedMilliseconds} ms.\n");
 
             MessageBox.Show("Export Finished!");
         }
@@ -85,17 +83,16 @@ namespace RushBacTool
         {
             treeView.BeginUpdate();
 
-            TreeNode root = new TreeNode { Text = fileName, Tag = "ROOT" };
-
-            for (int i = 0; i < bacFile.AnimationFrames.Length; i++)
+            TreeNode root = new() { Text = _openedFileName, Tag = "ROOT" };
+            for (int i = 0; i < BacFile.AnimationFrames.Length; i++)
             {
-                AnimationFrame animFrame = bacFile.AnimationFrames[i];
-                TreeNode anim = new TreeNode { Text = "Animation Frame " + i, Tag = animFrame };
+                AnimationFrames animFrame = BacFile.AnimationFrames[i];
+                TreeNode anim = new() { Text = "Animation " + i, Tag = animFrame };
 
-                for (int j = 0; j < animFrame.frames.Count; j++)
+                for (int j = 0; j < animFrame.Frames.Count; j++)
                 {
-                    Frame frame = animFrame.frames[j];
-                    TreeNode node = new TreeNode { Text = "Frame " + j, Tag = new KeyValuePair<int, Frame>(i, frame) };
+                    AnimationFrame frame = animFrame.Frames[j];
+                    TreeNode node = new() { Text = "Frame " + j, Tag = new KeyValuePair<int, AnimationFrame>(i, frame) };
                     anim.Nodes.Add(node);
                 }
                 root.Nodes.Add(anim);
@@ -108,62 +105,69 @@ namespace RushBacTool
 
         void TreeView_AfterSelect(object sender, TreeViewEventArgs e)
         {
+            foreach (Control c in propGroup.Controls)
+                c.Dispose();
             propGroup.Controls.Clear();
             TreeNode node = e.Node;
 
-            if (node.Tag is KeyValuePair<int, Frame> framePair)
+            if (node.Tag is KeyValuePair<int, AnimationFrame> framePair)
             {
-                FrameControl c = new FrameControl(this, framePair.Key, node.Index);
+                FrameControl c = new(this, framePair.Key, node.Index);
                 propGroup.Controls.Add(c);
             }
-            if (node.Tag is AnimationFrame)
+            if (node.Tag is AnimationFrames)
             {
-                AnimFrameControl c = new AnimFrameControl(this, node.Index);
+                AnimFrameControl c = new(this, node.Index);
                 propGroup.Controls.Add(c);
             }
         }
 
         void CacheBitmaps()
         {
-            bitmaps = new Bitmap[bacFile.AnimationFrames.Length][];
-            /*for (int i = 0; i < bitmaps.Length; i++)
+            Bitmaps = new Bitmap[BacFile.AnimationFrames.Length][];
+            for (int i = 0; i < Bitmaps.Length; i++)
             {
-                AnimationFrame anim = bacFile.AnimationFrames[i];
-                Bitmap[] frames = new Bitmap[anim.frames.Count];
+                AnimationFrames anim = BacFile.AnimationFrames[i];
+                Bitmap[] frames = new Bitmap[anim.Frames.Count];
                 for (int j = 0; j < frames.Length; j++)
-                    frames[j] = anim.frames[j].GetBitmap();
-                bitmaps[i] = frames;
-            }*/
+                {
+                    ImageResult image = anim.Frames[j].GetImage(true);
+                    Bitmap b = new(image.Width, image.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    var data = b.LockBits(new(Point.Empty, b.Size), System.Drawing.Imaging.ImageLockMode.WriteOnly, b.PixelFormat);
+                    System.Runtime.InteropServices.Marshal.Copy(image.ToArgb(), 0, data.Scan0, data.Stride * data.Height);
+                    b.UnlockBits(data);
+                    frames[j] = b;
+                }
+                Bitmaps[i] = frames;
+            }
         }
 
         void DisposeBitmaps()
         {
-            if (bitmaps == null) return;
-            foreach (Bitmap[] frames in bitmaps)
+            if (Bitmaps == null)
+                return;
+            foreach (Bitmap[] frames in Bitmaps)
+            {
                 foreach (Bitmap b in frames)
                     b.Dispose();
-            bitmaps = null;
+            }
+            Bitmaps = null;
         }
 
         void OpenToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            using (OpenFileDialog dialog = new OpenFileDialog { Filter = "Bac Files (*.bac)|*.bac" })
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                    LoadBac(dialog.FileName);
-            }
+            using OpenFileDialog dialog = new() { Filter = "Bac Files (*.bac)|*.bac" };
+            if (dialog.ShowDialog() == DialogResult.OK)
+                LoadBac(dialog.FileName);
         }
 
         void ExportAllToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (bacFile == null)
+            if (BacFile == null)
                 return;
-
-            using (SaveFileDialog dialog = new SaveFileDialog { Title = "Select an output Folder.", FileName = "out" })
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                    ExportAll(dialog.FileName);
-            }
+            using SaveFileDialog dialog = new() { Title = "Select an output Folder.", FileName = "out" };
+            if (dialog.ShowDialog() == DialogResult.OK)
+                ExportAll(dialog.FileName);
         }
     }
 }

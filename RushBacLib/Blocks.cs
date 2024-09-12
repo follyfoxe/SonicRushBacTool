@@ -6,6 +6,7 @@ namespace RushBacLib
     // The BAC format is little endian.
     // This code doesn't read the file in it's entirety, and isn't fully accurate.
     // More details here: https://www.romhacking.net/documents/669/
+    // And some code was taken from here: https://github.com/NotKit/sonic-rush-tools/blob/master/bac.py
 
     public class Header
     {
@@ -14,7 +15,7 @@ namespace RushBacLib
         public string MagicString => BacFile.Encoding.GetString(BitConverter.GetBytes(MagicNumber));
         public readonly uint MagicNumber;
 
-        // Absolute offsets, from the beggining of the file.
+        // Absolute offsets, relative to the beggining of the file.
         public readonly uint AnimationMappings;
         public readonly uint AnimationFrames;
         public readonly uint FrameAssembly;
@@ -33,7 +34,6 @@ namespace RushBacLib
             Palettes = reader.ReadUInt32();
             ImageData = reader.ReadUInt32();
             AnimationInfo = reader.ReadUInt32();
-            Trace.WriteLineIf(AnimationInfo != 0x1C, "Block 1 is not located at 0x1C.");
         }
     }
 
@@ -62,24 +62,15 @@ namespace RushBacLib
         public readonly byte[] Unknown = reader.ReadBytes(20);
     }
 
-    public class AnimationMappings // Block 2, contains multiple AnimationFrames [SubBlock 1]
+    public class AnimationMappings // Block 2, acts as an animation table of some sorts.
     {
         public readonly uint BlockSize;
         public readonly AnimationMapping[] Mappings;
 
-        public AnimationMappings(BacFile file, BinaryReader reader)
+        public AnimationMappings(BinaryReader reader)
         {
             BlockSize = reader.ReadUInt32();
-
-            uint frameCount = file.AnimationInfo.EntryCount;
-            if (BlockSize != frameCount * 8 + 4)
-            {
-                Trace.WriteLine("Warning: Block2's size is invalid. Trying to obtain correct Frame Count...");
-                frameCount = (BlockSize - 4) / 8;
-                Trace.WriteLine("Recalculated Frame Count: " + frameCount);
-            }
-
-            Mappings = new AnimationMapping[frameCount];
+            Mappings = new AnimationMapping[(BlockSize - 4) / 8];
             for (int i = 0; i < Mappings.Length; i++)
                 Mappings[i] = new AnimationMapping(reader);
         }
@@ -87,109 +78,106 @@ namespace RushBacLib
 
     public class AnimationMapping(BinaryReader reader)
     {
-        public readonly uint FrameOffset = reader.ReadUInt32(); // Offset to Block 3's data, relative to Header.AnimationFrames
+        public readonly uint FrameOffset = reader.ReadUInt32(); // Offset to Block 3's data, relative to Header.AnimationFrames.
         public readonly uint Unknown = reader.ReadUInt32();
     }
 
-    // This is wrong. The total block size is given once and for Block 3 and AnimationMappings point to the frame data of Block3.
-    public class AnimationFrame
+    public class AnimationFrames
     {
-        public readonly uint totalBlockSize;
-        public readonly uint restingFrame;
-        public readonly List<Frame> frames;
+        public readonly uint RestingFrame;
+        public readonly List<AnimationFrame> Frames;
 
-        public AnimationFrame(BacFile file, BinaryReader reader)
+        public AnimationFrames(BacFile file, BinaryReader reader)
         {
-            totalBlockSize = reader.ReadUInt32();
-            frames = new List<Frame>();
+            Frames = [];
 
-            Frame frame = null;
-            ushort blockId, blockSize;
-
+            AnimationFrame frame = null;
             while (reader.BaseStream.Position < file.Header.FrameAssembly)
             {
-                blockId = reader.ReadUInt16();
-                blockSize = reader.ReadUInt16();
+                // ID 1 indicates a new frame and ID 4 acts as a terminator for the AnimationFrame.
+                ushort blockId = reader.ReadUInt16();
+                ushort blockSize = reader.ReadUInt16();
 
-                if (blockId == 4) //Resting/default frame?, as the block is not inside a "Frame", it can be used as a terminator
+                if (blockId == 4)
                 {
                     frame?.Build(file, reader);
-                    restingFrame = reader.ReadUInt32();
+                    RestingFrame = reader.ReadUInt32();
                     break;
                 }
 
                 switch (blockId)
                 {
-                    case 0: //Animation Info, not implemented //usually the last sub-sub-block.
+                    case 0: // Animation Info, not implemented
                         reader.BaseStream.Position += blockSize - 4;
                         break;
-                    case 1: //Frame Assembly, might have multiple parts //usually the first sub-sub-block.
-
+                    case 1: // Frame Assembly, usually the first frame block.
                         frame?.Build(file, reader);
-                        frame = new Frame();
-                        frames.Add(frame);
+                        frame = new AnimationFrame();
+                        Frames.Add(frame);
 
                         int assemblyPartCount = (blockSize - 4) / 4;
-                        frame.frameOffsets = new Frame.FrameOffset[assemblyPartCount];
+                        frame.FrameOffsets = new AnimationFrame.FrameOffset[assemblyPartCount];
                         for (int i = 0; i < assemblyPartCount; i++)
-                            frame.frameOffsets[i] = new Frame.FrameOffset(reader);
-
+                            frame.FrameOffsets[i] = new AnimationFrame.FrameOffset(reader);
                         break;
-                    case 2: //Image Parts - goes into a "Frame"
+                    case 2: // Image Parts
                         int imagePartCount = (blockSize - 4) / 8;
-                        frame.imageParts = new Frame.ImagePart[imagePartCount];
+                        if (frame.ImageParts != null)
+                            Trace.WriteLine("Interesting...");
+                        frame.ImageParts = new AnimationFrame.ImagePart[imagePartCount];
                         for (int i = 0; i < imagePartCount; i++)
-                            frame.imageParts[i] = new Frame.ImagePart(reader);
-
+                            frame.ImageParts[i] = new AnimationFrame.ImagePart(reader);
                         break;
-                    case 3: //Palette Parts - goes into a "Frame"
+                    case 3: // Palette Parts
                         int palettePartCount = (blockSize - 4) / 8;
-                        frame.paletteParts = new Frame.PalettePart[palettePartCount];
+                        if (frame.PaletteParts != null)
+                            Trace.WriteLine("Interesting...");
+                        frame.PaletteParts = new AnimationFrame.PalettePart[palettePartCount];
                         for (int i = 0; i < palettePartCount; i++)
-                            frame.paletteParts[i] = new Frame.PalettePart(reader);
-
+                            frame.PaletteParts[i] = new AnimationFrame.PalettePart(reader);
                         break;
                     default:
-                        Trace.WriteLine($"Unknown Block {blockId}!");
-                        reader.BaseStream.Position += blockSize - 4; //substracting 4 accounts for the blockId and blockSize.
+                        Trace.WriteLine($"Unhandled Frame Block {blockId}.");
+                        reader.BaseStream.Position += blockSize - 4; // The 4 accounts for the blockId and blockSize.
                         break;
                 }
             }
         }
     }
 
-    public class Frame //Custom block/helper thing, not in the File Specs
+    public class AnimationFrame // Custom helper thing, not in the File Specs
     {
-        public FrameOffset[] frameOffsets; //offsets into FrameAssembly
-        public ImagePart[] imageParts;
-        public PalettePart[] paletteParts;
+        public FrameOffset[] FrameOffsets; // Offsets into FrameAssembly
+        public ImagePart[] ImageParts;
+        public PalettePart[] PaletteParts;
 
-        public FrameAssembly frameAssembly;
-        public ImageData[] images;
-        public Palette palette;
+        public FrameAssembly FrameAssembly;
+        public ImageData[] Images;
+        public Palette Palette;
 
+        // TODO: Refactor this...
         public void Build(BacFile file, BinaryReader reader)
         {
             long last = reader.BaseStream.Position;
-            reader.BaseStream.Position = file.Header.FrameAssembly + frameOffsets[0].offset;
-            frameAssembly = new FrameAssembly(reader);
+            reader.BaseStream.Position = file.Header.FrameAssembly + FrameOffsets[0].DataOffset;
+            FrameAssembly = new FrameAssembly(reader);
 
-            if (imageParts != null)
+            if (ImageParts != null)
             {
-                images = new ImageData[imageParts.Length];
-                for (int i = 0; i < images.Length; i++)
+                Images = new ImageData[ImageParts.Length];
+                for (int i = 0; i < Images.Length; i++)
                 {
-                    reader.BaseStream.Position = file.Header.ImageData + imageParts[i].offset;
-                    images[i] = new ImageData(reader);
+                    reader.BaseStream.Position = file.Header.ImageData + ImageParts[i].DataOffset;
+                    Images[i] = new ImageData(reader);
                 }
             }
             else
                 Trace.WriteLine("Warning: Frame doesn't have any Image Parts!");
 
-            if (paletteParts != null)
+            if (PaletteParts != null)
             {
-                reader.BaseStream.Position = file.Header.Palettes + paletteParts[0].offset;
-                palette = new Palette(reader);
+                reader.BaseStream.Position = file.Header.Palettes + PaletteParts[0].DataOffset;
+                Palette = new Palette(reader);
             }
             else
                 Trace.WriteLine("Warning: Frame doesn't have any Palettes!");
@@ -197,127 +185,111 @@ namespace RushBacLib
             reader.BaseStream.Position = last;
         }
 
-        /*public Bitmap GetBitmap()
+        public ImageResult GetImage(bool transparency = true)
         {
-            int width = frameAssembly.frameXRight - frameAssembly.frameX;
-            int height = frameAssembly.frameYBottom - frameAssembly.frameY;
+            // Perhaps Left = HotSpotX + FrameX
+            // And Right = HotSpot + FrameXRight
 
-            Bitmap bitmap = new Bitmap(width, height);
-            using (Graphics g = Graphics.FromImage(bitmap))
-            {
-                for (int i = 0; i < images?.Length; i++)
-                    frameAssembly.DrawBitmap(g, palette, images[i], i);
-            }
-            return bitmap;
-        }*/
+            int width = FrameAssembly.FrameXRight - FrameAssembly.FrameX;
+            int height = FrameAssembly.FrameYBottom - FrameAssembly.FrameY;
+            //Trace.WriteLine($"FrameX: {FrameAssembly.FrameX}, FrameY: {FrameAssembly.FrameY}, FrameXRight: {FrameAssembly.FrameXRight}, FrameYBottom: {FrameAssembly.FrameYBottom}");
+            //int width = 128;
+            //int height = 128;
 
-        #region SubBlocks
-        public readonly struct FrameOffset
-        {
-            public readonly uint offset;
-            public FrameOffset(BinaryReader reader) => offset = reader.ReadUInt32();
+            ImageResult image = new(width, height);
+            if (Images == null)
+                return image;
+
+            Color[] pal = Palette.GetColors(transparency);
+            for (int i = 0; i < Images.Length; i++)
+                FrameAssembly.DrawImage(image, pal, Images[i], i);
+            return image;
         }
 
-        public readonly struct ImagePart
+        public readonly struct FrameOffset(BinaryReader reader)
         {
-            public readonly uint offset;
-            public readonly uint dataSize;
-
-            public ImagePart(BinaryReader reader)
-            {
-                offset = reader.ReadUInt32();
-                dataSize = reader.ReadUInt32();
-            }
+            public readonly uint DataOffset = reader.ReadUInt32();
         }
 
-        public readonly struct PalettePart
+        public readonly struct ImagePart(BinaryReader reader)
         {
-            public readonly uint offset;
-            public readonly uint colorCount;
-
-            public PalettePart(BinaryReader reader)
-            {
-                offset = reader.ReadUInt32();
-                colorCount = reader.ReadUInt32();
-            }
+            public readonly uint DataOffset = reader.ReadUInt32();
+            public readonly uint DataSize = reader.ReadUInt32();
         }
-        #endregion
+
+        public readonly struct PalettePart(BinaryReader reader)
+        {
+            public readonly uint DataOffset = reader.ReadUInt32();
+            public readonly uint ColorCount = reader.ReadUInt32();
+        }
     }
 
     public class FrameAssembly
     {
         // Attributes from sprite.h of libnds
         // Attribute 0 consists of 8 bits of Y plus the following flags:
-        public const int attr_0_square = (0 << 14);
-        public const int attr_0_wide = (1 << 14);
-        public const int attr_0_tall = (2 << 14);
+        public const int Attr0Square = 0 << 14;
+        public const int Attr0Wide = 1 << 14;
+        public const int Attr0Tall = 2 << 14;
 
         // Atribute 1 consists of 9 bits of X plus the following flags:
-        public const int attr_1_flip_x = (1 << 12);
-        public const int attr_1_flip_y = (1 << 13);
-        public const int attr_1_size_8 = (0 << 14);
-        public const int attr_1_size_16 = (1 << 14);
-        public const int attr_1_size_32 = (2 << 14);
-        public const int attr_1_size_64 = (3 << 14);
+        public const int Attr1FlipX = 1 << 12;
+        public const int Attr1FlipY = 1 << 13;
+        public const int Attr1Size8 = 0 << 14;
+        public const int Attr1Size16 = 1 << 14;
+        public const int Attr1Size32 = 2 << 14;
+        public const int Attr1Size64 = 3 << 14;
 
-        public static readonly Point[] size_square = { new Point(8, 8), new Point(16, 16), new Point(32, 32), new Point(64, 64) };
-        public static readonly Point[] size_wide = { new Point(16, 8), new Point(32, 8), new Point(32, 16), new Point(64, 32) };
-        public static readonly Point[] size_tall = { new Point(8, 16), new Point(8, 32), new Point(16, 32), new Point(32, 64) };
+        public static readonly Size[] SizeSquare = [new(8, 8), new(16, 16), new(32, 32), new(64, 64)];
+        public static readonly Size[] SizeWide = [new(16, 8), new(32, 8), new(32, 16), new(64, 32)];
+        public static readonly Size[] SizeTall = [new(8, 16), new(8, 32), new(16, 32), new(32, 64)];
 
-        public readonly uint framePartCount;
-        public readonly short frameX, frameY, frameXRight, frameYBottom, hotSpotX, hotSpotY;
+        public readonly uint FramePartCount;
+        public readonly short FrameX, FrameY, FrameXRight, FrameYBottom, HotSpotX, HotSpotY;
 
-        public ImagePartInfo[] partInfos;
+        public ImagePartInfo[] PartInfos;
 
         public FrameAssembly(BinaryReader reader)
         {
-            framePartCount = reader.ReadUInt32();
-            frameX = reader.ReadInt16();
-            frameY = reader.ReadInt16();
-            frameXRight = reader.ReadInt16();
-            frameYBottom = reader.ReadInt16();
-            hotSpotX = reader.ReadInt16();
-            hotSpotY = reader.ReadInt16();
+            FramePartCount = reader.ReadUInt32();
+            FrameX = reader.ReadInt16();
+            FrameY = reader.ReadInt16();
+            FrameXRight = reader.ReadInt16();
+            FrameYBottom = reader.ReadInt16();
+            HotSpotX = reader.ReadInt16();
+            HotSpotY = reader.ReadInt16();
 
-            partInfos = new ImagePartInfo[framePartCount];
-            for (int i = 0; i < framePartCount; i++)
-                partInfos[i] = new ImagePartInfo(reader);
+            PartInfos = new ImagePartInfo[FramePartCount];
+            for (int i = 0; i < FramePartCount; i++)
+                PartInfos[i] = new ImagePartInfo(reader);
         }
 
-        /*public void DrawBitmap(Graphics g, Palette palette, ImageData image, int partIndex)
+        public void DrawImage(ImageResult output, Color[] palette, ImageData image, int partIndex)
         {
-            ImagePartInfo info = partInfos[partIndex];
+            ImagePartInfo info = PartInfos[partIndex];
 
-            int partY = info.attr0 & 0xFF;
-            int partX = info.attr1 & 0x1FF;
-            int size = info.attr1 >> 14;
+            int partY = info.Attr0 & 0xFF;
+            int partX = info.Attr1 & 0x1FF;
+            int size = info.Attr1 >> 14;
 
-            Point partSize;
-            if ((info.attr0 & attr_0_tall) != 0) //Sprite shape is NxM with N < M (Height > Width)
-                partSize = size_tall[size];
-            else if ((info.attr0 & attr_0_wide) != 0) //Sprite shape is NxM with N > M (Height < Width)
-                partSize = size_wide[size];
-            else //Sprite shape is NxN (Height == Width)
-                partSize = size_square[size];
+            Size partSize;
+            if ((info.Attr0 & Attr0Tall) != 0) // Sprite shape is NxM with N < M (Height > Width)
+                partSize = SizeTall[size];
+            else if ((info.Attr0 & Attr0Wide) != 0) // Sprite shape is NxM with N > M (Height < Width)
+                partSize = SizeWide[size];
+            else // Sprite shape is NxN (Height == Width)
+                partSize = SizeSquare[size];
 
-            using (Bitmap bitmap = image.GetBitmap(palette, partSize.X, partSize.Y))
-                g.DrawImage(bitmap, partX, partY);
-        }*/
+            ImageResult partImage = image.GetImage(palette, partSize.Width, partSize.Height);
+            output.DrawImage(partImage, partX, partY);
+        }
 
-        public readonly struct ImagePartInfo
+        public readonly struct ImagePartInfo(BinaryReader reader)
         {
-            public readonly ushort attr0;
-            public readonly ushort attr1;
-            public readonly ushort attr2;
-            public readonly ushort attr3;
-
-            public ImagePartInfo(BinaryReader reader)
-            {
-                attr0 = reader.ReadUInt16();
-                attr1 = reader.ReadUInt16();
-                attr2 = reader.ReadUInt16();
-                attr3 = reader.ReadUInt16();
-            }
+            public readonly ushort Attr0 = reader.ReadUInt16();
+            public readonly ushort Attr1 = reader.ReadUInt16();
+            public readonly ushort Attr2 = reader.ReadUInt16();
+            public readonly ushort Attr3 = reader.ReadUInt16();
         }
     }
 
@@ -325,100 +297,79 @@ namespace RushBacLib
     {
         public static byte[] ReadCompressed(BinaryReader reader)
         {
-            //1 byte: Compression? (0x00=Uncompressed, 0x10=LZSS)
-            //3 bytes: Size of data region
+            // 1 byte: Compression? (0x00 = Uncompressed, 0x10 = LZSS)
+            // 3 bytes: Size of data region
             uint header = reader.ReadUInt32();
             uint compression = header & 0xFF;
             uint uncompressedSize = header >> 8;
 
             if (compression == 0)
                 return reader.ReadBytes((int)uncompressedSize);
-            else if (compression == 0x10) //Compressed
+            else if (compression == 0x10) // Compressed
                 throw new Exception("Compression is not supported!");
             else
                 throw new Exception("Invalid compression type: " + compression);
         }
     }
 
-    public class Palette //4bpp rgb
+    public class Palette(BinaryReader reader) // 4bpp rgb
     {
-        public readonly byte[] data;
-        public readonly Color[] entries;
+        public readonly byte[] Data = BlockUtility.ReadCompressed(reader);
 
-        public Palette(BinaryReader reader)
+        public Color[] GetColors(bool transparency = true)
         {
-            data = BlockUtility.ReadCompressed(reader);
-
-            entries = new Color[data.Length / 2];
-            for (int i = 0; i < data.Length; i += 2)
+            Color[] colors = new Color[Data.Length / 2];
+            for (int i = 0; i < Data.Length; i += 2)
             {
-                int color = BitConverter.ToUInt16(data, i);
+                int color = BitConverter.ToUInt16(Data, i);
                 int r = color & 31;
                 int g = (color & 31 << 5) >> 5;
                 int b = (color & 31 << 10) >> 10;
                 r = (int)(r * (255 / 31.0f));
                 g = (int)(g * (255 / 31.0f));
                 b = (int)(b * (255 / 31.0f));
-                entries[i / 2] = Color.FromArgb(r, g, b);
+                colors[i / 2] = Color.FromArgb(r, g, b);
             }
+            if (transparency)
+                colors[0] = Color.FromArgb(0, colors[0]); // Index 0 is transparent. Maybe use an index instead of a bool.
+            return colors;
         }
-
-        /*public void SetColorPalette(Bitmap bitmap)
-        {
-            ColorPalette pal = bitmap.Palette; //returns a copy
-            entries.CopyTo(pal.Entries, 0);
-            bitmap.Palette = pal;
-        }*/
     }
 
-    public class ImageData //4bpp
+    public class ImageData(BinaryReader reader) // 4bpp
     {
-        public readonly byte[] data;
+        public readonly byte[] Data = BlockUtility.ReadCompressed(reader);
 
-        public ImageData(BinaryReader reader)
+        public ImageResult GetImage(Color[] palette, int width, int height)
         {
-            data = BlockUtility.ReadCompressed(reader);
-        }
+            ImageResult result = new(width, height);
+            List<ImageResult> tiles = [];
 
-        /*public Bitmap GetBitmap(Palette palette, int width, int height)
-        {
-            Bitmap bitmap = new Bitmap(width, height);
+            const int bytesPerTile = 32;
+            const int tileSize = 8;
 
-            List<Bitmap> tiles = new List<Bitmap>();
-            int bytesPerTile = 32;
-
-            for (int tile = 0; tile < data.Length; tile += bytesPerTile)
+            for (int tile = 0; tile < Data.Length; tile += bytesPerTile)
             {
                 byte[] pixels = new byte[bytesPerTile * 2];
                 for (int i = 0; i < pixels.Length; i += 2)
                 {
-                    byte b = data[tile + i / 2];
-
+                    byte b = Data[tile + i / 2];
                     pixels[i] = (byte)(b & 0x0F);
                     pixels[i + 1] = (byte)((b & 0xF0) >> 4);
                 }
 
-                Bitmap tileb = new Bitmap(8, 8, PixelFormat.Format8bppIndexed);
-                palette.SetColorPalette(tileb);
-
-                BitmapData bdata = tileb.LockBits(new Rectangle(0, 0, 8, 8), ImageLockMode.WriteOnly, tileb.PixelFormat);
-                System.Runtime.InteropServices.Marshal.Copy(pixels, 0, bdata.Scan0, bdata.Stride * bdata.Height);
-                tileb.UnlockBits(bdata);
-
-                tiles.Add(tileb);
+                ImageResult tileImage = new(tileSize, tileSize);
+                for (int i = 0; i < pixels.Length; i++)
+                    tileImage[i] = palette[pixels[i]];
+                tiles.Add(tileImage);
             }
 
-            using (Graphics g = Graphics.FromImage(bitmap))
-            {
-                int tilesPerRow = width / 8;
-                for (int i = 0; i < tiles.Count; i++)
-                    g.DrawImage(tiles[i], (i % tilesPerRow) * 8, (i / tilesPerRow) * 8);
-            }
+            int tilesPerRow = width / tileSize;
+            for (int i = 0; i < tiles.Count; i++)
+                result.DrawImage(tiles[i], (i % tilesPerRow) * tileSize, (i / tilesPerRow) * tileSize);
 
-            foreach (Bitmap b in tiles) b.Dispose();
             tiles.Clear();
-
-            return bitmap;
-        }*/
+            return result;
+        }
     }
 }
