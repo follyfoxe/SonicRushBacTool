@@ -9,8 +9,11 @@ namespace RushBacTool
         public Bitmap Bitmap { get; private set; }
 
         HatchBrush _backBrush;
+        Point _lastMousePos;
+
         bool _showGizmos = true;
         float _zoom = 2f;
+        PointF _viewOffset = PointF.Empty;
 
         public FramePreviewControl()
         {
@@ -46,6 +49,17 @@ namespace RushBacTool
             Invalidate();
         }
 
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (e.Button != MouseButtons.None)
+            {
+                _viewOffset += ((Size)e.Location - (Size)_lastMousePos) / _zoom;
+                Refresh();
+            }
+            _lastMousePos = e.Location;
+        }
+
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
@@ -66,7 +80,7 @@ namespace RushBacTool
             {
                 g.TranslateTransform(center.X, center.Y);
                 g.ScaleTransform(_zoom, _zoom);
-                g.TranslateTransform(-center.X, -center.Y);
+                g.TranslateTransform(-center.X + _viewOffset.X, -center.Y + _viewOffset.Y);
 
                 Point topLeft = Frame.GetTopLeft(center);
                 Point bottomRight = Frame.GetBottomRight(center);
@@ -91,6 +105,7 @@ namespace RushBacTool
 
         void ResetZoomMenuItem_Click(object sender, EventArgs e)
         {
+            _viewOffset = PointF.Empty;
             SetZoom(1f);
         }
     }

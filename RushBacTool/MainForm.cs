@@ -70,8 +70,7 @@ namespace RushBacTool
 
             sw.Stop();
             Trace.WriteLine($"Finished exporting in {sw.ElapsedMilliseconds} ms.\n");
-
-            MessageBox.Show("Export Finished!");
+            MessageBox.Show("Successfully exported to " + path, "Export");
         }
 
         void ResetControls()
@@ -114,21 +113,21 @@ namespace RushBacTool
             TreeNode root = new() { Text = _openedFileName, Tag = "ROOT" };
             for (int i = 0; i < BacFile.AnimationFrames.Length; i++)
             {
-                AnimationFrames animFrame = BacFile.AnimationFrames[i];
-                TreeNode anim = new()
+                AnimationFrames animation = BacFile.AnimationFrames[i];
+                TreeNode animNode = new()
                 {
-                    Text = "Animation " + i,
+                    Text = $"Animation {i} - Size {animation.Frames.Count}",
                     Tag = i
                 };
-                for (int j = 0; j < animFrame.Frames.Count; j++)
+                for (int j = 0; j < animation.Frames.Count; j++)
                 {
-                    anim.Nodes.Add(new TreeNode()
+                    animNode.Nodes.Add(new TreeNode()
                     {
                         Text = "Frame " + j,
                         Tag = (i, j)
                     });
                 }
-                root.Nodes.Add(anim);
+                root.Nodes.Add(animNode);
             }
 
             root.Expand();
@@ -147,10 +146,10 @@ namespace RushBacTool
             Bitmaps = new Bitmap[BacFile.AnimationFrames.Length][];
             for (int i = 0; i < Bitmaps.Length; i++)
             {
-                AnimationFrames anim = BacFile.AnimationFrames[i];
-                Bitmap[] frames = new Bitmap[anim.Frames.Count];
+                AnimationFrames animation = BacFile.AnimationFrames[i];
+                Bitmap[] frames = new Bitmap[animation.Frames.Count];
                 for (int j = 0; j < frames.Length; j++)
-                    frames[j] = anim.Frames[j].GetImage(true).ToBitmap();
+                    frames[j] = animation.Frames[j].GetImage(true).ToBitmap();
                 Bitmaps[i] = frames;
             }
         }
@@ -162,7 +161,7 @@ namespace RushBacTool
             foreach (Bitmap[] frames in Bitmaps)
             {
                 foreach (Bitmap b in frames)
-                    b.Dispose();
+                    b?.Dispose();
             }
             Bitmaps = null;
         }
@@ -178,9 +177,19 @@ namespace RushBacTool
         {
             if (BacFile == null)
                 return;
-            using SaveFileDialog dialog = new() { Title = "Select an output Folder.", FileName = "out" };
+            using FolderBrowserDialog dialog = new()
+            {
+                Description = "Select an output folder",
+                UseDescriptionForTitle = true,
+                AutoUpgradeEnabled = true
+            };
             if (dialog.ShowDialog() == DialogResult.OK)
-                ExportAll(dialog.FileName);
+                ExportAll(dialog.SelectedPath);
+        }
+
+        void ExitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Close();
         }
     }
 }

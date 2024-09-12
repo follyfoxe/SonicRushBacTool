@@ -5,7 +5,7 @@ namespace RushBacTool
     public partial class AnimationControl : UserControl
     {
         public int AnimationIndex { get; }
-        public AnimationFrames Animation { get; }
+        public AnimationFrames Animation => _mainForm.BacFile.AnimationFrames[AnimationIndex];
         readonly MainForm _mainForm;
 
         int _currentFrame;
@@ -28,9 +28,7 @@ namespace RushBacTool
         public AnimationControl(MainForm form, int animIndex) : this()
         {
             _mainForm = form;
-
             AnimationIndex = animIndex;
-            Animation = form.BacFile.AnimationFrames[animIndex];
             frameUpDown.Maximum = Animation.Frames.Count - 1;
 
             //SetFrame((int)Animation.RestingFrame);
@@ -60,6 +58,9 @@ namespace RushBacTool
         {
             _currentFrame++;
             _currentFrame %= Animation.Frames.Count;
+
+            // Assuming duration is in frames and the game runs at 60 fps...
+            animTimer.Interval = (int)Animation.Frames[_currentFrame].Info.Duration * 16;
             frameUpDown.Value = _currentFrame;
         }
 

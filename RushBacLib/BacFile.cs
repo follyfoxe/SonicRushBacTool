@@ -22,9 +22,8 @@ namespace RushBacLib
 
             Header = new Header(reader);
             if (Header.AnimationInfo != 0x1C)
-                Trace.WriteLine("Header doesn't point to Block 1 being at 0x1C. Ignoring.");
-            else // This seems wrong...
-                reader.BaseStream.Seek(Header.AnimationInfo, SeekOrigin.Begin);
+                Trace.WriteLine("Header doesn't point to Block 1 being at 0x1C.");
+            reader.BaseStream.Seek(Header.AnimationInfo, SeekOrigin.Begin);
 
             AnimationInfo = new AnimationInfo(reader);
             Trace.WriteLine("Info Entry Count: " + AnimationInfo.EntryCount);
