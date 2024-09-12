@@ -1,13 +1,9 @@
-﻿using System.Windows.Forms;
-
-namespace RushBacTool
+﻿namespace RushBacTool
 {
     public partial class FrameControl : UserControl
     {
-        public int AnimIndex { get; }
+        public int AnimationIndex { get; }
         public int FrameIndex { get; }
-
-        readonly MainForm mainForm;
 
         public FrameControl()
         {
@@ -17,11 +13,9 @@ namespace RushBacTool
 
         public FrameControl(MainForm form, int animIndex, int frameIndex) : this()
         {
-            mainForm = form;
-            AnimIndex = animIndex;
+            AnimationIndex = animIndex;
             FrameIndex = frameIndex;
-
-            previewBox.Image = form.Bitmaps[animIndex][frameIndex];
+            framePreview.Preview(form.BacFile.AnimationFrames[animIndex].Frames[frameIndex], form.Bitmaps[animIndex][frameIndex]);
         }
     }
 }

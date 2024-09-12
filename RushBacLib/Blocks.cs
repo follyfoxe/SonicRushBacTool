@@ -95,20 +95,13 @@ namespace RushBacLib
             while (reader.BaseStream.Position < file.Header.FrameAssembly)
             {
                 // ID 1 indicates a new frame and ID 4 acts as a terminator for the AnimationFrame.
+                long start = reader.BaseStream.Position;
                 ushort blockId = reader.ReadUInt16();
                 ushort blockSize = reader.ReadUInt16();
-
-                if (blockId == 4)
-                {
-                    frame?.Build(file, reader);
-                    RestingFrame = reader.ReadUInt32();
-                    break;
-                }
 
                 switch (blockId)
                 {
                     case 0: // Animation Info, not implemented
-                        reader.BaseStream.Position += blockSize - 4;
                         break;
                     case 1: // Frame Assembly, usually the first frame block.
                         frame?.Build(file, reader);
@@ -116,6 +109,8 @@ namespace RushBacLib
                         Frames.Add(frame);
 
                         int assemblyPartCount = (blockSize - 4) / 4;
+                        if (frame.FrameOffsets != null)
+                            Trace.WriteLine("Frame Block 1 appeared more than once?");
                         frame.FrameOffsets = new AnimationFrame.FrameOffset[assemblyPartCount];
                         for (int i = 0; i < assemblyPartCount; i++)
                             frame.FrameOffsets[i] = new AnimationFrame.FrameOffset(reader);
@@ -123,7 +118,7 @@ namespace RushBacLib
                     case 2: // Image Parts
                         int imagePartCount = (blockSize - 4) / 8;
                         if (frame.ImageParts != null)
-                            Trace.WriteLine("Interesting...");
+                            Trace.WriteLine("Frame Block 2 appeared more than once?");
                         frame.ImageParts = new AnimationFrame.ImagePart[imagePartCount];
                         for (int i = 0; i < imagePartCount; i++)
                             frame.ImageParts[i] = new AnimationFrame.ImagePart(reader);
@@ -131,16 +126,23 @@ namespace RushBacLib
                     case 3: // Palette Parts
                         int palettePartCount = (blockSize - 4) / 8;
                         if (frame.PaletteParts != null)
-                            Trace.WriteLine("Interesting...");
+                            Trace.WriteLine("Frame Block 3 appeared more than once?");
                         frame.PaletteParts = new AnimationFrame.PalettePart[palettePartCount];
                         for (int i = 0; i < palettePartCount; i++)
                             frame.PaletteParts[i] = new AnimationFrame.PalettePart(reader);
                         break;
+                    case 4: // Resting Frame
+                        frame?.Build(file, reader);
+                        RestingFrame = reader.ReadUInt32();
+                        break;
                     default:
                         Trace.WriteLine($"Unhandled Frame Block {blockId}.");
-                        reader.BaseStream.Position += blockSize - 4; // The 4 accounts for the blockId and blockSize.
                         break;
                 }
+
+                reader.BaseStream.Seek(start + blockSize, SeekOrigin.Begin);
+                if (blockId == 4)
+                    break;
             }
         }
     }
@@ -159,7 +161,7 @@ namespace RushBacLib
         public void Build(BacFile file, BinaryReader reader)
         {
             long last = reader.BaseStream.Position;
-            reader.BaseStream.Position = file.Header.FrameAssembly + FrameOffsets[0].DataOffset;
+            reader.BaseStream.Seek(file.Header.FrameAssembly + FrameOffsets[0].DataOffset, SeekOrigin.Begin);
             FrameAssembly = new FrameAssembly(reader);
 
             if (ImageParts != null)
@@ -167,7 +169,7 @@ namespace RushBacLib
                 Images = new ImageData[ImageParts.Length];
                 for (int i = 0; i < Images.Length; i++)
                 {
-                    reader.BaseStream.Position = file.Header.ImageData + ImageParts[i].DataOffset;
+                    reader.BaseStream.Seek(file.Header.ImageData + ImageParts[i].DataOffset, SeekOrigin.Begin);
                     Images[i] = new ImageData(reader);
                 }
             }
@@ -176,25 +178,34 @@ namespace RushBacLib
 
             if (PaletteParts != null)
             {
-                reader.BaseStream.Position = file.Header.Palettes + PaletteParts[0].DataOffset;
+                reader.BaseStream.Seek(file.Header.Palettes + PaletteParts[0].DataOffset, SeekOrigin.Begin);
                 Palette = new Palette(reader);
             }
             else
                 Trace.WriteLine("Warning: Frame doesn't have any Palettes!");
+            reader.BaseStream.Seek(last, SeekOrigin.Begin);
+        }
 
-            reader.BaseStream.Position = last;
+        // How to render properly: TopLeft = CanvasCenter + (FrameX, FrameY)
+        // https://osdl.sourceforge.net/main/documentation/misc/nintendo-DS/graphical-chain/OSDL-graphical-chain.html
+        public Point GetTopLeft(Point centerPosition)
+        {
+            return centerPosition + new Size(FrameAssembly.FrameX, FrameAssembly.FrameY);
+        }
+
+        public Point GetBottomRight(Point centerPosition)
+        {
+            return centerPosition + new Size(FrameAssembly.FrameXRight, FrameAssembly.FrameYBottom);
         }
 
         public ImageResult GetImage(bool transparency = true)
         {
-            // Perhaps Left = HotSpotX + FrameX
-            // And Right = HotSpot + FrameXRight
+            //Trace.Write($"FrameX: {FrameAssembly.FrameX}, FrameY: {FrameAssembly.FrameY}, ");
+            //Trace.Write($"FrameXRight: {FrameAssembly.FrameXRight}, FrameYBottom: {FrameAssembly.FrameYBottom}, ");
+            //Trace.WriteLine($"HotSpotX: {FrameAssembly.HotSpotX}, HotSpotY: {FrameAssembly.HotSpotY}");
 
             int width = FrameAssembly.FrameXRight - FrameAssembly.FrameX;
             int height = FrameAssembly.FrameYBottom - FrameAssembly.FrameY;
-            //Trace.WriteLine($"FrameX: {FrameAssembly.FrameX}, FrameY: {FrameAssembly.FrameY}, FrameXRight: {FrameAssembly.FrameXRight}, FrameYBottom: {FrameAssembly.FrameYBottom}");
-            //int width = 128;
-            //int height = 128;
 
             ImageResult image = new(width, height);
             if (Images == null)
@@ -252,12 +263,12 @@ namespace RushBacLib
         public FrameAssembly(BinaryReader reader)
         {
             FramePartCount = reader.ReadUInt32();
-            FrameX = reader.ReadInt16();
-            FrameY = reader.ReadInt16();
+            FrameX = reader.ReadInt16(); // Offset from center of the full image
+            FrameY = reader.ReadInt16(); // Offset from center of the full image
             FrameXRight = reader.ReadInt16();
             FrameYBottom = reader.ReadInt16();
-            HotSpotX = reader.ReadInt16();
-            HotSpotY = reader.ReadInt16();
+            HotSpotX = reader.ReadInt16(); // Always -FrameX ?
+            HotSpotY = reader.ReadInt16(); // Always -FrameY ?
 
             PartInfos = new ImagePartInfo[FramePartCount];
             for (int i = 0; i < FramePartCount; i++)

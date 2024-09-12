@@ -4,7 +4,7 @@ namespace RushBacTool
 {
     public partial class AnimFrameControl : UserControl
     {
-        public int AnimIndex { get; }
+        public int AnimationIndex { get; }
         public AnimationFrames Animation { get; }
         readonly MainForm _mainForm;
 
@@ -28,8 +28,8 @@ namespace RushBacTool
         public AnimFrameControl(MainForm form, int animIndex) : this()
         {
             _mainForm = form;
-            AnimIndex = animIndex;
 
+            AnimationIndex = animIndex;
             Animation = form.BacFile.AnimationFrames[animIndex];
             frameUpDown.Maximum = Animation.Frames.Count - 1;
 
@@ -47,14 +47,14 @@ namespace RushBacTool
 
         void UpdatePreview()
         {
-            if (!_disposed)
-                previewBox.Image = _mainForm.Bitmaps[AnimIndex][_currentFrame];
+            if (_disposed)
+                return;
+            framePreview.Preview(Animation.Frames[_currentFrame], _mainForm.Bitmaps[AnimationIndex][_currentFrame]);
         }
 
         void FrameUpDown_ValueChanged(object sender, EventArgs e)
         {
             _currentFrame = (int)frameUpDown.Value;
-            //Trace.WriteLine($"FrameY: {Animation.Frames[_currentFrame].FrameAssembly.FrameY}, HotSpotY: {Animation.Frames[_currentFrame].FrameAssembly.HotSpotY}");
             UpdatePreview();
         }
 
