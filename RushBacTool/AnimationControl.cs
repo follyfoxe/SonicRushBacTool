@@ -2,7 +2,7 @@
 
 namespace RushBacTool
 {
-    public partial class AnimFrameControl : UserControl
+    public partial class AnimationControl : UserControl
     {
         public int AnimationIndex { get; }
         public AnimationFrames Animation { get; }
@@ -11,7 +11,7 @@ namespace RushBacTool
         int _currentFrame;
         bool _disposed;
 
-        public AnimFrameControl()
+        public AnimationControl()
         {
             InitializeComponent();
             Disposed += AnimFrameControl_Disposed;
@@ -25,15 +25,13 @@ namespace RushBacTool
             _disposed = true;
         }
 
-        public AnimFrameControl(MainForm form, int animIndex) : this()
+        public AnimationControl(MainForm form, int animIndex) : this()
         {
             _mainForm = form;
 
             AnimationIndex = animIndex;
             Animation = form.BacFile.AnimationFrames[animIndex];
             frameUpDown.Maximum = Animation.Frames.Count - 1;
-
-            titleLabel.Text += " " + animIndex;
 
             //SetFrame((int)Animation.RestingFrame);
             UpdatePreview();
@@ -67,6 +65,7 @@ namespace RushBacTool
 
         void Play()
         {
+            Stop();
             SetFrame(0);
             animTimer.Start();
         }

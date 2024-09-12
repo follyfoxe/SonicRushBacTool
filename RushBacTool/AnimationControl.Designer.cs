@@ -1,7 +1,7 @@
 ﻿
 namespace RushBacTool
 {
-    partial class AnimFrameControl
+    partial class AnimationControl
     {
         /// <summary> 
         /// Required designer variable.
@@ -30,7 +30,6 @@ namespace RushBacTool
         private void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
-            titleLabel = new Label();
             groupBox1 = new GroupBox();
             framePreview = new FramePreviewControl();
             playButton = new Button();
@@ -49,17 +48,6 @@ namespace RushBacTool
             ((System.ComponentModel.ISupportInitialize)frameUpDown).BeginInit();
             SuspendLayout();
             // 
-            // titleLabel
-            // 
-            titleLabel.Dock = DockStyle.Top;
-            titleLabel.Location = new Point(0, 0);
-            titleLabel.Margin = new Padding(4, 0, 4, 0);
-            titleLabel.Name = "titleLabel";
-            titleLabel.Size = new Size(781, 28);
-            titleLabel.TabIndex = 3;
-            titleLabel.Text = "Animation";
-            titleLabel.TextAlign = ContentAlignment.MiddleCenter;
-            // 
             // groupBox1
             // 
             groupBox1.Controls.Add(framePreview);
@@ -68,17 +56,18 @@ namespace RushBacTool
             groupBox1.Margin = new Padding(4, 5, 4, 5);
             groupBox1.Name = "groupBox1";
             groupBox1.Padding = new Padding(4, 5, 4, 5);
-            groupBox1.Size = new Size(771, 335);
+            groupBox1.Size = new Size(781, 463);
             groupBox1.TabIndex = 4;
             groupBox1.TabStop = false;
-            groupBox1.Text = "Preview";
+            groupBox1.Text = "Frame Preview";
             // 
             // framePreview
             // 
+            framePreview.BorderStyle = BorderStyle.FixedSingle;
             framePreview.Dock = DockStyle.Fill;
             framePreview.Location = new Point(4, 25);
             framePreview.Name = "framePreview";
-            framePreview.Size = new Size(763, 305);
+            framePreview.Size = new Size(773, 433);
             framePreview.TabIndex = 0;
             // 
             // playButton
@@ -86,7 +75,7 @@ namespace RushBacTool
             playButton.Location = new Point(4, 5);
             playButton.Margin = new Padding(4, 5, 4, 5);
             playButton.Name = "playButton";
-            playButton.Size = new Size(83, 35);
+            playButton.Size = new Size(80, 30);
             playButton.TabIndex = 5;
             playButton.Text = "Play";
             playButton.UseVisualStyleBackColor = true;
@@ -94,10 +83,10 @@ namespace RushBacTool
             // 
             // stopButton
             // 
-            stopButton.Location = new Point(95, 5);
+            stopButton.Location = new Point(92, 5);
             stopButton.Margin = new Padding(4, 5, 4, 5);
             stopButton.Name = "stopButton";
-            stopButton.Size = new Size(81, 35);
+            stopButton.Size = new Size(80, 30);
             stopButton.TabIndex = 6;
             stopButton.Text = "Stop";
             stopButton.UseVisualStyleBackColor = true;
@@ -105,9 +94,8 @@ namespace RushBacTool
             // 
             // splitContainer1
             // 
-            splitContainer1.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            splitContainer1.BorderStyle = BorderStyle.FixedSingle;
-            splitContainer1.Location = new Point(4, 32);
+            splitContainer1.Dock = DockStyle.Fill;
+            splitContainer1.Location = new Point(0, 0);
             splitContainer1.Margin = new Padding(4, 5, 4, 5);
             splitContainer1.Name = "splitContainer1";
             splitContainer1.Orientation = Orientation.Horizontal;
@@ -121,20 +109,20 @@ namespace RushBacTool
             splitContainer1.Panel2.Controls.Add(panel1);
             splitContainer1.Panel2.Controls.Add(playButton);
             splitContainer1.Panel2.Controls.Add(stopButton);
-            splitContainer1.Size = new Size(773, 554);
-            splitContainer1.SplitterDistance = 337;
+            splitContainer1.Size = new Size(781, 591);
+            splitContainer1.SplitterDistance = 463;
             splitContainer1.SplitterWidth = 6;
             splitContainer1.TabIndex = 7;
             // 
             // panel1
             // 
-            panel1.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
             panel1.Controls.Add(label2);
             panel1.Controls.Add(frameUpDown);
-            panel1.Location = new Point(537, 5);
+            panel1.Dock = DockStyle.Right;
+            panel1.Location = new Point(552, 0);
             panel1.Margin = new Padding(4, 5, 4, 5);
             panel1.Name = "panel1";
-            panel1.Size = new Size(229, 187);
+            panel1.Size = new Size(229, 122);
             panel1.TabIndex = 9;
             // 
             // label2
@@ -160,14 +148,13 @@ namespace RushBacTool
             // 
             animTimer.Tick += AnimTimer_Tick;
             // 
-            // AnimFrameControl
+            // AnimationControl
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(splitContainer1);
-            Controls.Add(titleLabel);
             Margin = new Padding(4, 5, 4, 5);
-            Name = "AnimFrameControl";
+            Name = "AnimationControl";
             Size = new Size(781, 591);
             groupBox1.ResumeLayout(false);
             splitContainer1.Panel1.ResumeLayout(false);
@@ -181,8 +168,6 @@ namespace RushBacTool
         }
 
         #endregion
-
-        private System.Windows.Forms.Label titleLabel;
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.Button playButton;
         private System.Windows.Forms.Button stopButton;

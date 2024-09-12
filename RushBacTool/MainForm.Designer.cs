@@ -33,7 +33,8 @@ namespace RushBacTool
             panel1 = new Panel();
             splitter1 = new Splitter();
             panel2 = new Panel();
-            propGroup = new GroupBox();
+            propertyGroup = new GroupBox();
+            selectionLabel = new Label();
             menuStrip1 = new MenuStrip();
             fileToolStripMenuItem = new ToolStripMenuItem();
             openToolStripMenuItem = new ToolStripMenuItem();
@@ -76,7 +77,8 @@ namespace RushBacTool
             // 
             // panel2
             // 
-            panel2.Controls.Add(propGroup);
+            panel2.Controls.Add(propertyGroup);
+            panel2.Controls.Add(selectionLabel);
             panel2.Dock = DockStyle.Fill;
             panel2.Location = new Point(286, 30);
             panel2.Margin = new Padding(4, 5, 4, 5);
@@ -85,17 +87,27 @@ namespace RushBacTool
             panel2.Size = new Size(781, 662);
             panel2.TabIndex = 6;
             // 
-            // propGroup
+            // propertyGroup
             // 
-            propGroup.Dock = DockStyle.Fill;
-            propGroup.Location = new Point(8, 9);
-            propGroup.Margin = new Padding(4, 5, 4, 5);
-            propGroup.Name = "propGroup";
-            propGroup.Padding = new Padding(4, 5, 4, 5);
-            propGroup.Size = new Size(765, 644);
-            propGroup.TabIndex = 0;
-            propGroup.TabStop = false;
-            propGroup.Text = "Properties";
+            propertyGroup.Dock = DockStyle.Fill;
+            propertyGroup.Location = new Point(8, 29);
+            propertyGroup.Margin = new Padding(4, 5, 4, 5);
+            propertyGroup.Name = "propertyGroup";
+            propertyGroup.Padding = new Padding(10, 2, 10, 10);
+            propertyGroup.Size = new Size(765, 624);
+            propertyGroup.TabIndex = 0;
+            propertyGroup.TabStop = false;
+            propertyGroup.Text = "Properties";
+            // 
+            // selectionLabel
+            // 
+            selectionLabel.Dock = DockStyle.Top;
+            selectionLabel.Location = new Point(8, 9);
+            selectionLabel.Name = "selectionLabel";
+            selectionLabel.Size = new Size(765, 20);
+            selectionLabel.TabIndex = 1;
+            selectionLabel.Text = "(Nothing)";
+            selectionLabel.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // menuStrip1
             // 
@@ -156,11 +168,12 @@ namespace RushBacTool
         private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Splitter splitter1;
         private System.Windows.Forms.Panel panel2;
-        private System.Windows.Forms.GroupBox propGroup;
+        private System.Windows.Forms.GroupBox propertyGroup;
         private System.Windows.Forms.MenuStrip menuStrip1;
         private System.Windows.Forms.ToolStripMenuItem fileToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem openToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportAllToolStripMenuItem;
+        private Label selectionLabel;
     }
 }
 

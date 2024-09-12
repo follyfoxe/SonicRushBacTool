@@ -7,7 +7,10 @@ namespace RushBacTool
     {
         public AnimationFrame Frame { get; private set; }
         public Bitmap Bitmap { get; private set; }
+
         HatchBrush _backBrush;
+        bool _showGizmos = true;
+        float _zoom = 2f;
 
         public FramePreviewControl()
         {
@@ -25,6 +28,12 @@ namespace RushBacTool
             Refresh();
         }
 
+        public void SetZoom(float zoom)
+        {
+            _zoom = Math.Clamp(zoom, 0.1f, 100f);
+            Refresh();
+        }
+
         void OnDisposed(object sender, EventArgs e)
         {
             _backBrush?.Dispose();
@@ -37,19 +46,52 @@ namespace RushBacTool
             Invalidate();
         }
 
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            int scroll = Math.Sign(e.Delta);
+            SetZoom(_zoom * (1f + scroll * 0.2f));
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
+            g.InterpolationMode = InterpolationMode.NearestNeighbor;
+
+            Size size = ClientSize;
+            Point center = ClientRectangle.Location + size / 2;
             g.FillRectangle(_backBrush, e.ClipRectangle);
+
             if (Frame != null && Bitmap != null)
             {
-                Point pos = e.ClipRectangle.Location + e.ClipRectangle.Size / 2;
-                Point topLeft = Frame.GetTopLeft(pos);
-                Point bottomRight = Frame.GetBottomRight(pos);
-                g.DrawRectangle(Pens.Red, topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+                g.TranslateTransform(center.X, center.Y);
+                g.ScaleTransform(_zoom, _zoom);
+                g.TranslateTransform(-center.X, -center.Y);
+
+                Point topLeft = Frame.GetTopLeft(center);
+                Point bottomRight = Frame.GetBottomRight(center);
+                if (_showGizmos)
+                {
+                    Pen gizmoPen = Pens.Red;
+                    g.DrawRectangle(gizmoPen, topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+                    g.DrawLine(gizmoPen, center.X - 8, center.Y, center.X + 8, center.Y);
+                    g.DrawLine(gizmoPen, center.X, center.Y - 8, center.X, center.Y + 8);
+                }
                 g.DrawImage(Bitmap, topLeft);
             }
+
             base.OnPaint(e);
+        }
+
+        void ShowGizmosMenuItem_CheckedChanged(object sender, EventArgs e)
+        {
+            _showGizmos = showGizmosMenuItem.Checked;
+            Refresh();
+        }
+
+        void ResetZoomMenuItem_Click(object sender, EventArgs e)
+        {
+            SetZoom(1f);
         }
     }
 }

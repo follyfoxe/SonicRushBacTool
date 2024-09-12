@@ -14,7 +14,10 @@ namespace RushBacTool
         public MainForm()
         {
             InitializeComponent();
+
             _baseTitle = Text;
+            ResetControls();
+
             Disposed += OnDisposed;
         }
 
@@ -73,27 +76,57 @@ namespace RushBacTool
 
         void ResetControls()
         {
+            selectionLabel.Text = "(Nothing)";
             treeView.Nodes.Clear();
-            foreach (Control c in propGroup.Controls)
+            Inspect(null);
+        }
+
+        void Inspect(object target)
+        {
+            foreach (Control c in propertyGroup.Controls)
                 c.Dispose();
-            propGroup.Controls.Clear();
+            propertyGroup.Controls.Clear();
+
+            if (target == null)
+                return;
+
+            Control control;
+            switch (target)
+            {
+                case Control c:
+                    control = c;
+                    break;
+                case int i:
+                    control = new AnimationControl(this, i);
+                    break;
+                case (int i, int j):
+                    control = new FrameControl(this, i, j);
+                    break;
+                default:
+                    return;
+            }
+            propertyGroup.Controls.Add(control);
         }
 
         void CreateTree()
         {
             treeView.BeginUpdate();
-
             TreeNode root = new() { Text = _openedFileName, Tag = "ROOT" };
             for (int i = 0; i < BacFile.AnimationFrames.Length; i++)
             {
                 AnimationFrames animFrame = BacFile.AnimationFrames[i];
-                TreeNode anim = new() { Text = "Animation " + i, Tag = animFrame };
-
+                TreeNode anim = new()
+                {
+                    Text = "Animation " + i,
+                    Tag = i
+                };
                 for (int j = 0; j < animFrame.Frames.Count; j++)
                 {
-                    AnimationFrame frame = animFrame.Frames[j];
-                    TreeNode node = new() { Text = "Frame " + j, Tag = new KeyValuePair<int, AnimationFrame>(i, frame) };
-                    anim.Nodes.Add(node);
+                    anim.Nodes.Add(new TreeNode()
+                    {
+                        Text = "Frame " + j,
+                        Tag = (i, j)
+                    });
                 }
                 root.Nodes.Add(anim);
             }
@@ -105,21 +138,8 @@ namespace RushBacTool
 
         void TreeView_AfterSelect(object sender, TreeViewEventArgs e)
         {
-            foreach (Control c in propGroup.Controls)
-                c.Dispose();
-            propGroup.Controls.Clear();
-            TreeNode node = e.Node;
-
-            if (node.Tag is KeyValuePair<int, AnimationFrame> framePair)
-            {
-                FrameControl c = new(this, framePair.Key, node.Index);
-                propGroup.Controls.Add(c);
-            }
-            if (node.Tag is AnimationFrames)
-            {
-                AnimFrameControl c = new(this, node.Index);
-                propGroup.Controls.Add(c);
-            }
+            selectionLabel.Text = e.Node.Text;
+            Inspect(e.Node.Tag);
         }
 
         void CacheBitmaps()
@@ -130,14 +150,7 @@ namespace RushBacTool
                 AnimationFrames anim = BacFile.AnimationFrames[i];
                 Bitmap[] frames = new Bitmap[anim.Frames.Count];
                 for (int j = 0; j < frames.Length; j++)
-                {
-                    ImageResult image = anim.Frames[j].GetImage(true);
-                    Bitmap b = new(image.Width, image.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                    var data = b.LockBits(new(Point.Empty, b.Size), System.Drawing.Imaging.ImageLockMode.WriteOnly, b.PixelFormat);
-                    System.Runtime.InteropServices.Marshal.Copy(image.ToArgb(), 0, data.Scan0, data.Stride * data.Height);
-                    b.UnlockBits(data);
-                    frames[j] = b;
-                }
+                    frames[j] = anim.Frames[j].GetImage(true).ToBitmap();
                 Bitmaps[i] = frames;
             }
         }

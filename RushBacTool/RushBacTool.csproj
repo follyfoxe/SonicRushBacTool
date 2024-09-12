@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Update="AnimFrameControl.cs">
+    <Compile Update="AnimationControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Update="FrameControl.cs">
