@@ -126,14 +126,14 @@ namespace RushBacTool
         void CacheBitmaps()
         {
             bitmaps = new Bitmap[bacFile.AnimationFrames.Length][];
-            for (int i = 0; i < bitmaps.Length; i++)
+            /*for (int i = 0; i < bitmaps.Length; i++)
             {
                 AnimationFrame anim = bacFile.AnimationFrames[i];
                 Bitmap[] frames = new Bitmap[anim.frames.Count];
                 for (int j = 0; j < frames.Length; j++)
                     frames[j] = anim.frames[j].GetBitmap();
                 bitmaps[i] = frames;
-            }
+            }*/
         }
 
         void DisposeBitmaps()

@@ -1,100 +1,100 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
 
 namespace RushBacLib
 {
+    // The BAC format is little endian.
+    // This code doesn't read the file in it's entirety, and isn't fully accurate.
+    // More details here: https://www.romhacking.net/documents/669/
+
     public class Header
     {
-        public readonly string headerString;
+        public static readonly uint BacMagic = BitConverter.ToUInt32(BacFile.Encoding.GetBytes("BAC\x0A"));
 
-        public readonly uint pAnimationMappings;
-        public readonly uint pFrames;
-        public readonly uint pFrameAssembly;
-        public readonly uint pPalletes;
-        public readonly uint pImageData;
-        public readonly uint pAnimationInfo;
+        public string MagicString => BacFile.Encoding.GetString(BitConverter.GetBytes(MagicNumber));
+        public readonly uint MagicNumber;
+
+        // Absolute offsets, from the beggining of the file.
+        public readonly uint AnimationMappings;
+        public readonly uint AnimationFrames;
+        public readonly uint FrameAssembly;
+        public readonly uint Palettes;
+        public readonly uint ImageData;
+        public readonly uint AnimationInfo;
 
         public Header(BinaryReader reader)
         {
-            headerString = new string(reader.ReadChars(4));
-            pAnimationMappings = reader.ReadUInt32();
-            pFrames = reader.ReadUInt32();
-            pFrameAssembly = reader.ReadUInt32();
-            pPalletes = reader.ReadUInt32();
-            pImageData = reader.ReadUInt32();
-            pAnimationInfo = reader.ReadUInt32();
+            MagicNumber = reader.ReadUInt32();
+            Trace.WriteLineIf(MagicNumber != BacMagic, "Stream is not a BAC file, magic does not match.");
+
+            AnimationMappings = reader.ReadUInt32();
+            AnimationFrames = reader.ReadUInt32();
+            FrameAssembly = reader.ReadUInt32();
+            Palettes = reader.ReadUInt32();
+            ImageData = reader.ReadUInt32();
+            AnimationInfo = reader.ReadUInt32();
+            Trace.WriteLineIf(AnimationInfo != 0x1C, "Block 1 is not located at 0x1C.");
         }
     }
 
-    public class AnimationInfo //Block 1, contains multiple AnimationFrameInfo [SubBlock 1]
+    public class AnimationInfo // Block 1
     {
-        public readonly uint blockSize;
-        public readonly ushort frameCount;
-        public readonly ushort frameInfoSize;
-        public readonly byte[] unknown;
-
-        public readonly AnimationFrameInfo[] frameInfos;
+        public readonly uint BlockSize;
+        public readonly ushort EntryCount;
+        public readonly ushort EntrySize;
+        public readonly byte[] Unknown;
+        public readonly AnimationInfoEntry[] Entries;
 
         public AnimationInfo(BinaryReader reader)
         {
-            blockSize = reader.ReadUInt32();
-            frameCount = reader.ReadUInt16();
-            frameInfoSize = reader.ReadUInt16();
-            unknown = reader.ReadBytes(20);
-
-            frameInfos = new AnimationFrameInfo[frameCount];
-            for (int i = 0; i < frameCount; i++)
-                frameInfos[i] = new AnimationFrameInfo(reader);
+            BlockSize = reader.ReadUInt32();
+            EntryCount = reader.ReadUInt16();
+            EntrySize = reader.ReadUInt16();
+            Unknown = reader.ReadBytes(20);
+            Entries = new AnimationInfoEntry[EntryCount];
+            for (int i = 0; i < EntryCount; i++)
+                Entries[i] = new AnimationInfoEntry(reader);
         }
     }
 
-    public class AnimationFrameInfo //Sub Block of AnimationInfo
+    public class AnimationInfoEntry(BinaryReader reader)
     {
-        public readonly byte[] data; //unknown
-        public AnimationFrameInfo(BinaryReader reader) => data = reader.ReadBytes(20);
+        public readonly byte[] Unknown = reader.ReadBytes(20);
     }
 
-    public class AnimationMappings //Block 2, contains multiple AnimationFrames [SubBlock 1]
+    public class AnimationMappings // Block 2, contains multiple AnimationFrames [SubBlock 1]
     {
-        public readonly uint blockSize;
-        public readonly AnimationMapping[] mappings;
+        public readonly uint BlockSize;
+        public readonly AnimationMapping[] Mappings;
 
         public AnimationMappings(BacFile file, BinaryReader reader)
         {
-            blockSize = reader.ReadUInt32();
+            BlockSize = reader.ReadUInt32();
 
-            uint frameCount = file.AnimationInfo.frameCount;
-            if (blockSize != frameCount * 8 + 4)
+            uint frameCount = file.AnimationInfo.EntryCount;
+            if (BlockSize != frameCount * 8 + 4)
             {
-                Console.WriteLine("Warning: Block2's size is invalid. Trying to obtain correct Frame Count...");
-                frameCount = (blockSize - 4) / 8;
-                Console.WriteLine("Recalculated Frame Count: " + frameCount);
+                Trace.WriteLine("Warning: Block2's size is invalid. Trying to obtain correct Frame Count...");
+                frameCount = (BlockSize - 4) / 8;
+                Trace.WriteLine("Recalculated Frame Count: " + frameCount);
             }
 
-            mappings = new AnimationMapping[frameCount];
-            for (int i = 0; i < mappings.Length; i++)
-                mappings[i] = new AnimationMapping(reader);
+            Mappings = new AnimationMapping[frameCount];
+            for (int i = 0; i < Mappings.Length; i++)
+                Mappings[i] = new AnimationMapping(reader);
         }
     }
 
-    public class AnimationMapping //Sub Block of AnimationMappings, contains an offset to the Frame
+    public class AnimationMapping(BinaryReader reader)
     {
-        public readonly uint frameOffset;
-        public readonly uint unknown;
-
-        public AnimationMapping(BinaryReader reader)
-        {
-            frameOffset = reader.ReadUInt32();
-            unknown = reader.ReadUInt32();
-        }
+        public readonly uint FrameOffset = reader.ReadUInt32(); // Offset to Block 3's data, relative to Header.AnimationFrames
+        public readonly uint Unknown = reader.ReadUInt32();
     }
 
+    // This is wrong. The total block size is given once and for Block 3 and AnimationMappings point to the frame data of Block3.
     public class AnimationFrame
     {
-        public readonly uint totalBlockSize; 
+        public readonly uint totalBlockSize;
         public readonly uint restingFrame;
         public readonly List<Frame> frames;
 
@@ -106,7 +106,7 @@ namespace RushBacLib
             Frame frame = null;
             ushort blockId, blockSize;
 
-            while (reader.BaseStream.Position < file.Header.pFrameAssembly)
+            while (reader.BaseStream.Position < file.Header.FrameAssembly)
             {
                 blockId = reader.ReadUInt16();
                 blockSize = reader.ReadUInt16();
@@ -150,7 +150,7 @@ namespace RushBacLib
 
                         break;
                     default:
-                        Console.WriteLine("Unknown Block {0}!", blockId);
+                        Trace.WriteLine($"Unknown Block {blockId}!");
                         reader.BaseStream.Position += blockSize - 4; //substracting 4 accounts for the blockId and blockSize.
                         break;
                 }
@@ -171,7 +171,7 @@ namespace RushBacLib
         public void Build(BacFile file, BinaryReader reader)
         {
             long last = reader.BaseStream.Position;
-            reader.BaseStream.Position = file.Header.pFrameAssembly + frameOffsets[0].offset;
+            reader.BaseStream.Position = file.Header.FrameAssembly + frameOffsets[0].offset;
             frameAssembly = new FrameAssembly(reader);
 
             if (imageParts != null)
@@ -179,25 +179,25 @@ namespace RushBacLib
                 images = new ImageData[imageParts.Length];
                 for (int i = 0; i < images.Length; i++)
                 {
-                    reader.BaseStream.Position = file.Header.pImageData + imageParts[i].offset;
+                    reader.BaseStream.Position = file.Header.ImageData + imageParts[i].offset;
                     images[i] = new ImageData(reader);
                 }
             }
             else
-                Console.WriteLine("Warning: Frame doesn't have any Image Parts!");
+                Trace.WriteLine("Warning: Frame doesn't have any Image Parts!");
 
             if (paletteParts != null)
             {
-                reader.BaseStream.Position = file.Header.pPalletes + paletteParts[0].offset;
+                reader.BaseStream.Position = file.Header.Palettes + paletteParts[0].offset;
                 palette = new Palette(reader);
             }
             else
-                Console.WriteLine("Warning: Frame doesn't have any Palettes!");
+                Trace.WriteLine("Warning: Frame doesn't have any Palettes!");
 
             reader.BaseStream.Position = last;
         }
 
-        public Bitmap GetBitmap()
+        /*public Bitmap GetBitmap()
         {
             int width = frameAssembly.frameXRight - frameAssembly.frameX;
             int height = frameAssembly.frameYBottom - frameAssembly.frameY;
@@ -209,7 +209,7 @@ namespace RushBacLib
                     frameAssembly.DrawBitmap(g, palette, images[i], i);
             }
             return bitmap;
-        }
+        }*/
 
         #region SubBlocks
         public readonly struct FrameOffset
@@ -284,7 +284,7 @@ namespace RushBacLib
                 partInfos[i] = new ImagePartInfo(reader);
         }
 
-        public void DrawBitmap(Graphics g, Palette palette, ImageData image, int partIndex)
+        /*public void DrawBitmap(Graphics g, Palette palette, ImageData image, int partIndex)
         {
             ImagePartInfo info = partInfos[partIndex];
 
@@ -302,7 +302,7 @@ namespace RushBacLib
 
             using (Bitmap bitmap = image.GetBitmap(palette, partSize.X, partSize.Y))
                 g.DrawImage(bitmap, partX, partY);
-        }
+        }*/
 
         public readonly struct ImagePartInfo
         {
@@ -363,12 +363,12 @@ namespace RushBacLib
             }
         }
 
-        public void SetColorPalette(Bitmap bitmap)
+        /*public void SetColorPalette(Bitmap bitmap)
         {
             ColorPalette pal = bitmap.Palette; //returns a copy
             entries.CopyTo(pal.Entries, 0);
             bitmap.Palette = pal;
-        }
+        }*/
     }
 
     public class ImageData //4bpp
@@ -380,7 +380,7 @@ namespace RushBacLib
             data = BlockUtility.ReadCompressed(reader);
         }
 
-        public Bitmap GetBitmap(Palette palette, int width, int height)
+        /*public Bitmap GetBitmap(Palette palette, int width, int height)
         {
             Bitmap bitmap = new Bitmap(width, height);
 
@@ -419,6 +419,6 @@ namespace RushBacLib
             tiles.Clear();
 
             return bitmap;
-        }
+        }*/
     }
 }
