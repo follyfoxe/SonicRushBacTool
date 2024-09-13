@@ -1,15 +1,18 @@
 # Sonic Rush BAC Tool
 A tool written in C# for viewing and converting Sonic Rush .bac files to pngs.<br>
 
-# Usage [OUTDATED]
-Go head over to the [new wiki!](https://github.com/chor64/Sonic-Rush-Bac-Tool/wiki)
+# Usage
+Go head over to the [wiki!](https://github.com/follyfoxe/SonicRushBacTool/wiki)
 
 # Compatibility
 I've tested it with some Sonic Rush's files and it seems to work fine, and it might be compatible with Sonic Colors as well. Haven't tested it with Sonic Rush Adventure's files.<br>
-
 Basic LZ77 compression is implemented now!<br>
 
 If you encounter any problems, or cases where this tool fails, feel free to open an issue!<br>
+
+# Requirements
+- Windows 7 or later
+- .Net 8.0 Runtime Installed
 
 # Resources used
 Here's a list of resources that were useful for making this project a reality.

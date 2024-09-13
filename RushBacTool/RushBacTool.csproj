@@ -6,15 +6,12 @@
     <Nullable>disable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Update="AnimationControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Update="FrameControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
+    <Compile Update="AnimationControl.cs" />
+    <Compile Update="FrameControl.cs" />
   </ItemGroup>
 
   <ItemGroup>

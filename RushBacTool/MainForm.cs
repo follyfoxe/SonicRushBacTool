@@ -13,6 +13,7 @@ namespace RushBacTool
 
         public MainForm()
         {
+            Trace.WriteLine($"Sonic Rush Bac Tool v{Application.ProductVersion}\n");
             InitializeComponent();
 
             _baseTitle = Text;
