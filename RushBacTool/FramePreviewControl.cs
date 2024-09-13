@@ -24,6 +24,11 @@ namespace RushBacTool
             Disposed += OnDisposed;
         }
 
+        public void Preview(FrameCache frameCache, int animation, int frame)
+        {
+            Preview(frameCache.BacFile.AnimationFrames[animation].Frames[frame], frameCache.GetImage(animation, frame));
+        }
+
         public void Preview(AnimationFrame frame, Bitmap bitmap)
         {
             Frame = frame;

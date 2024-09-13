@@ -62,7 +62,7 @@ namespace RushBacLib
     {
         public readonly uint BlockSize;
         public readonly ushort EntryCount;
-        public readonly ushort EntrySize;
+        public readonly ushort EntrySize; // May be wrong
         public readonly byte[] Unknown;
         public readonly AnimationInfoEntry[] Entries;
 
@@ -100,12 +100,12 @@ namespace RushBacLib
     public readonly struct AnimationMapping(BinaryReader reader)
     {
         public readonly uint FrameOffset = reader.ReadUInt32(); // Offset to Block 3's data, relative to Header.AnimationFrames.
-        public readonly uint Unknown = reader.ReadUInt32();
+        public readonly uint Unknown = reader.ReadUInt32(); // Might be flags of some kind?
     }
 
-    public readonly struct AnimationFrames
+    public class AnimationFrames // Not 100% accurate
     {
-        public readonly uint RestingFrame;
+        public readonly int RestingFrame;
         public readonly List<AnimationFrame> Frames;
 
         public AnimationFrames(BacFile file, BinaryReader reader)
@@ -113,7 +113,7 @@ namespace RushBacLib
             Frames = [];
 
             AnimationFrame frame = null;
-            // Trace.WriteLine("[Begin animation]");
+            Dictionary<long, int> frameOffsets = [];
             while (reader.BaseStream.Position < file.Header.FrameAssembly)
             {
                 // ID 1 indicates a new frame and ID 4 acts as a terminator for the AnimationFrame.
@@ -127,11 +127,12 @@ namespace RushBacLib
                     case 0: // Animation Info, not implemented
                         frame.Info = new AnimationFrame.FrameInfo(reader);
                         Trace.Assert(size == AnimationFrame.FrameInfo.Size, $"Size: {size}, Count: {size / AnimationFrame.FrameInfo.Size}");
-                        // Trace.WriteLine($"FrameIndex: {frame.Info.FrameIndex} FrameCount: {frame.Info.FrameCount} Duration: {frame.Info.Duration}");
                         break;
                     case 1: // Frame Assembly, usually the first frame block.
                         frame?.Build(file, reader);
+
                         frame = new AnimationFrame();
+                        frameOffsets.Add(start - file.Header.AnimationFrames, Frames.Count);
                         Frames.Add(frame);
 
                         if (frame.FrameOffsets.Count > 0)
@@ -157,7 +158,10 @@ namespace RushBacLib
                     case 4: // Resting Frame
                         frame?.Build(file, reader);
                         frame = null;
-                        RestingFrame = reader.ReadUInt32();
+
+                        uint restingFrameOffset = reader.ReadUInt32();
+                        if (!frameOffsets.TryGetValue(restingFrameOffset, out RestingFrame))
+                            Trace.WriteLine("Couldn't extract resting frame! Perhaps it doesn't point to a valid location?");
                         break;
                     default:
                         Trace.WriteLine($"Unhandled Frame Block {blockId}.");
@@ -211,7 +215,7 @@ namespace RushBacLib
             reader.BaseStream.Seek(last, SeekOrigin.Begin);
         }
 
-        // How to render properly: TopLeft = CanvasCenter + (FrameX, FrameY)
+        // How to render properly: TopLeft = Position + (FrameX, FrameY)
         // https://osdl.sourceforge.net/main/documentation/misc/nintendo-DS/graphical-chain/OSDL-graphical-chain.html
         public Point GetTopLeft(Point centerPosition)
         {
@@ -223,12 +227,8 @@ namespace RushBacLib
             return centerPosition + new Size(FrameAssembly.FrameXRight, FrameAssembly.FrameYBottom);
         }
 
-        public ImageResult GetImage(bool transparency = true)
+        public ImageResult GetImage(bool transparency = true, bool linear = false)
         {
-            //Trace.Write($"FrameX: {FrameAssembly.FrameX}, FrameY: {FrameAssembly.FrameY}, ");
-            //Trace.Write($"FrameXRight: {FrameAssembly.FrameXRight}, FrameYBottom: {FrameAssembly.FrameYBottom}, ");
-            //Trace.WriteLine($"HotSpotX: {FrameAssembly.HotSpotX}, HotSpotY: {FrameAssembly.HotSpotY}");
-
             int width = FrameAssembly.FrameXRight - FrameAssembly.FrameX;
             int height = FrameAssembly.FrameYBottom - FrameAssembly.FrameY;
 
@@ -238,7 +238,7 @@ namespace RushBacLib
 
             Color[] pal = Palette.GetColors(transparency);
             for (int i = 0; i < Images.Length; i++)
-                FrameAssembly.DrawImage(image, pal, Images[i], i);
+                FrameAssembly.DrawImage(image, pal, Images[i], i, linear);
             return image;
         }
 
@@ -291,13 +291,18 @@ namespace RushBacLib
         public static readonly Size[] SizeWide = [new(16, 8), new(32, 8), new(32, 16), new(64, 32)];
         public static readonly Size[] SizeTall = [new(8, 16), new(8, 32), new(16, 32), new(32, 64)];
 
-        public readonly uint FramePartCount;
+        public readonly ushort FramePartCount;
+        public readonly ushort Unknown;
         public readonly short FrameX, FrameY, FrameXRight, FrameYBottom, HotSpotX, HotSpotY;
         public readonly ImagePartInfo[] PartInfos;
 
         public FrameAssembly(BinaryReader reader)
         {
-            FramePartCount = reader.ReadUInt32();
+            // When reading FramePartCount as a u4, ac_gmk_needle.bac has a value of 65537.
+            // So it would make sense for it to actually be a u2. That leaves us with an extra unknown word.
+            FramePartCount = reader.ReadUInt16();
+            Unknown = reader.ReadUInt16();
+
             FrameX = reader.ReadInt16(); // Offset from center of the full image
             FrameY = reader.ReadInt16(); // Offset from center of the full image
             FrameXRight = reader.ReadInt16();
@@ -310,7 +315,7 @@ namespace RushBacLib
                 PartInfos[i] = new ImagePartInfo(reader);
         }
 
-        public void DrawImage(ImageResult output, Color[] palette, ImageData imageData, int partIndex)
+        public void DrawImage(ImageResult output, Color[] palette, ImageData imageData, int partIndex, bool linear)
         {
             ImagePartInfo info = PartInfos[partIndex];
             int partY = info.Attr0 & 0xFF;
@@ -325,12 +330,13 @@ namespace RushBacLib
             else // Sprite shape is NxN (Height == Width)
                 partSize = SizeSquare[size];
 
-            ImageResult partImage = imageData.GetImage(palette, partSize.Width, partSize.Height);
+            ImageResult partImage = imageData.GetImage(palette, partSize.Width, partSize.Height, linear);
             output.DrawImage(partImage, partX, partY);
         }
 
         public readonly struct ImagePartInfo(BinaryReader reader)
         {
+            public const int Size = 8;
             public readonly ushort Attr0 = reader.ReadUInt16();
             public readonly ushort Attr1 = reader.ReadUInt16();
             public readonly ushort Attr2 = reader.ReadUInt16();
@@ -366,13 +372,18 @@ namespace RushBacLib
     {
         public readonly byte[] Data = BlockUtility.ReadCompressed(reader, reader.BaseStream.Position);
 
-        public ImageResult GetImage(Color[] palette, int width, int height)
+        public ImageResult GetImage(Color[] palette, int width, int height, bool linear)
         {
             ImageResult result = new(width, height);
             List<ImageResult> tiles = [];
 
-            const int bytesPerTile = 32;
-            const int tileSize = 8;
+            int bytesPerTile = 32;
+            Size tileSize = new(8, 8);
+            if (linear)
+            {
+                bytesPerTile = Data.Length;
+                tileSize = new(width, height);
+            }
 
             for (int tile = 0; tile < Data.Length; tile += bytesPerTile)
             {
@@ -384,15 +395,15 @@ namespace RushBacLib
                     pixels[i + 1] = (byte)((b & 0xF0) >> 4);
                 }
 
-                ImageResult tileImage = new(tileSize, tileSize);
+                ImageResult tileImage = new(tileSize.Width, tileSize.Height);
                 for (int i = 0; i < pixels.Length; i++)
                     tileImage[i] = palette[pixels[i]];
                 tiles.Add(tileImage);
             }
 
-            int tilesPerRow = width / tileSize;
+            int tilesPerRow = width / tileSize.Width;
             for (int i = 0; i < tiles.Count; i++)
-                result.DrawImage(tiles[i], (i % tilesPerRow) * tileSize, (i / tilesPerRow) * tileSize);
+                result.DrawImage(tiles[i], (i % tilesPerRow) * tileSize.Width, (i / tilesPerRow) * tileSize.Height);
 
             tiles.Clear();
             return result;

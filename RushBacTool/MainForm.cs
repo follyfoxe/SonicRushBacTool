@@ -5,8 +5,8 @@ namespace RushBacTool
 {
     public partial class MainForm : Form
     {
-        public BacFile BacFile;
-        public Bitmap[][] Bitmaps;
+        public BacFile BacFile { get; private set; }
+        public FrameCache FrameCache { get; private set; }
 
         readonly string _baseTitle;
         string _openedFileName;
@@ -29,7 +29,8 @@ namespace RushBacTool
 
         void OnDisposed(object sender, EventArgs e)
         {
-            DisposeBitmaps();
+            FrameCache?.ClearCache();
+            FrameCache = null;
         }
 
         void LoadBac(string path)
@@ -38,13 +39,13 @@ namespace RushBacTool
             Text = $"{_baseTitle} [{_openedFileName}]";
 
             ResetControls();
-            DisposeBitmaps();
+            FrameCache?.ClearCache();
 
             Trace.WriteLine($"Begin load {_openedFileName}");
             Stopwatch sw = Stopwatch.StartNew();
 
             BacFile = new BacFile(path);
-            CacheBitmaps();
+            FrameCache = new FrameCache(BacFile);
             CreateTree();
 
             sw.Stop();
@@ -53,19 +54,20 @@ namespace RushBacTool
 
         void ExportAll(string path)
         {
+            ResetControls();
+            FrameCache?.ClearCache();
+
             Trace.WriteLine($"Begin export all {_openedFileName}");
             Stopwatch sw = Stopwatch.StartNew();
-
             Directory.CreateDirectory(path);
-            for (int i = 0; i < Bitmaps.Length; i++)
-            {
-                Bitmap[] frames = Bitmaps[i];
 
+            for (int i = 0; i < FrameCache.AnimationCount; i++)
+            {
                 string dir = Path.Combine(path, "Animation " + i);
                 Directory.CreateDirectory(dir);
 
-                for (int j = 0; j < frames.Length; j++)
-                    frames[j].Save(Path.Combine(dir, "Frame " + j + ".png"));
+                for (int j = 0; j < FrameCache.GetFrameCount(i); j++)
+                    FrameCache.GetImage(i, j).Save(Path.Combine(dir, "Frame " + j + ".png"));
             }
 
             sw.Stop();
@@ -86,31 +88,32 @@ namespace RushBacTool
                 c.Dispose();
             propertyGroup.Controls.Clear();
 
-            if (target == null)
-                return;
-
             Control control;
             switch (target)
             {
+                case null:
+                    return;
                 case Control c:
                     control = c;
                     break;
                 case int i:
-                    control = new AnimationControl(this, i);
+                    control = new AnimationControl(FrameCache, i);
                     break;
                 case (int i, int j):
-                    control = new FrameControl(this, i, j);
+                    control = new FrameControl(FrameCache, i, j);
                     break;
                 default:
-                    return;
+                    control = new PropertyGrid() { SelectedObject = target, PropertySort = PropertySort.Categorized };
+                    break;
             }
+            control.Dock = DockStyle.Fill;
             propertyGroup.Controls.Add(control);
         }
 
         void CreateTree()
         {
             treeView.BeginUpdate();
-            TreeNode root = new() { Text = _openedFileName, Tag = "ROOT" };
+            TreeNode root = new() { Text = _openedFileName, Tag = BacFile };
             for (int i = 0; i < BacFile.AnimationFrames.Length; i++)
             {
                 AnimationFrames animation = BacFile.AnimationFrames[i];
@@ -132,6 +135,7 @@ namespace RushBacTool
 
             root.Expand();
             treeView.Nodes.Add(root);
+            treeView.SelectedNode = root;
             treeView.EndUpdate();
         }
 
@@ -139,31 +143,6 @@ namespace RushBacTool
         {
             selectionLabel.Text = e.Node.Text;
             Inspect(e.Node.Tag);
-        }
-
-        void CacheBitmaps()
-        {
-            Bitmaps = new Bitmap[BacFile.AnimationFrames.Length][];
-            for (int i = 0; i < Bitmaps.Length; i++)
-            {
-                AnimationFrames animation = BacFile.AnimationFrames[i];
-                Bitmap[] frames = new Bitmap[animation.Frames.Count];
-                for (int j = 0; j < frames.Length; j++)
-                    frames[j] = animation.Frames[j].GetImage(true).ToBitmap();
-                Bitmaps[i] = frames;
-            }
-        }
-
-        void DisposeBitmaps()
-        {
-            if (Bitmaps == null)
-                return;
-            foreach (Bitmap[] frames in Bitmaps)
-            {
-                foreach (Bitmap b in frames)
-                    b?.Dispose();
-            }
-            Bitmaps = null;
         }
 
         void OpenToolStripMenuItem_Click(object sender, EventArgs e)

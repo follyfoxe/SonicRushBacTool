@@ -7,10 +7,10 @@ namespace RushBacLib
     {
         public static readonly Encoding Encoding = Encoding.UTF8;
 
-        public Header Header;
-        public AnimationInfo AnimationInfo;
-        public AnimationMappings AnimationMappings;
-        public AnimationFrames[] AnimationFrames;
+        public readonly Header Header;
+        public readonly AnimationInfo AnimationInfo;
+        public readonly AnimationMappings AnimationMappings;
+        public readonly AnimationFrames[] AnimationFrames;
 
         public BacFile(string path) : this(File.OpenRead(path), false)
         {

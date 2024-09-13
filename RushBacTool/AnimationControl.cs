@@ -4,9 +4,9 @@ namespace RushBacTool
 {
     public partial class AnimationControl : UserControl
     {
+        public FrameCache FrameCache { get; }
         public int AnimationIndex { get; }
-        public AnimationFrames Animation => _mainForm.BacFile.AnimationFrames[AnimationIndex];
-        readonly MainForm _mainForm;
+        public AnimationFrames Animation => FrameCache.BacFile.AnimationFrames[AnimationIndex];
 
         int _currentFrame;
         bool _disposed;
@@ -25,18 +25,20 @@ namespace RushBacTool
             _disposed = true;
         }
 
-        public AnimationControl(MainForm form, int animIndex) : this()
+        public AnimationControl(FrameCache frameCache, int animation) : this()
         {
-            _mainForm = form;
-            AnimationIndex = animIndex;
+            FrameCache = frameCache;
+            AnimationIndex = animation;
             frameUpDown.Maximum = Animation.Frames.Count - 1;
 
-            //SetFrame((int)Animation.RestingFrame);
+            SetFrame(Animation.RestingFrame);
             UpdatePreview();
         }
 
         void SetFrame(int index)
         {
+            if (index < 0 || index >= Animation.Frames.Count)
+                return;
             _currentFrame = index;
             frameUpDown.Value = index;
         }
@@ -45,7 +47,7 @@ namespace RushBacTool
         {
             if (_disposed)
                 return;
-            framePreview.Preview(Animation.Frames[_currentFrame], _mainForm.Bitmaps[AnimationIndex][_currentFrame]);
+            framePreview.Preview(FrameCache, AnimationIndex, _currentFrame);
         }
 
         void FrameUpDown_ValueChanged(object sender, EventArgs e)
@@ -68,13 +70,14 @@ namespace RushBacTool
         {
             Stop();
             SetFrame(0);
+            animTimer.Interval = 100;
             animTimer.Start();
         }
 
         void Stop()
         {
             animTimer.Stop();
-            //SetFrame((int)Animation.RestingFrame);
+            SetFrame(Animation.RestingFrame);
         }
 
         void PlayButton_Click(object sender, EventArgs e) => Play();
