@@ -1,39 +1,48 @@
-﻿using System;
-using System.IO;
+﻿using System.Diagnostics;
+using System.Text;
 
 namespace RushBacLib
 {
     public class BacFile
     {
-        public Header Header;
-        public AnimationInfo AnimationInfo;
-        public AnimationMappings AnimationMappings;
-        public AnimationFrame[] AnimationFrames;
+        public static readonly Encoding Encoding = Encoding.UTF8;
 
-        public BacFile(string path) : this(File.OpenRead(path)) { }
+        public readonly Header Header;
+        public readonly AnimationInfo AnimationInfo;
+        public readonly AnimationMappings AnimationMappings;
+        public readonly AnimationFrames[] AnimationFrames;
 
-        public BacFile(Stream stream)
+        public BacFile(string path) : this(File.OpenRead(path), false)
         {
-            //Format is Little Indian
-            BinaryReader reader = new BinaryReader(stream, System.Text.Encoding.UTF8);
+        }
+
+        public BacFile(Stream stream, bool leaveOpen = false)
+        {
+            using BinaryReader reader = new(stream, Encoding, leaveOpen);
 
             Header = new Header(reader);
-            Console.WriteLine(Header.headerString);
-            if (Header.pAnimationInfo != 0x1C) Console.WriteLine("Warning: Header points to Block1 not being at 0x1C! Ignoring...");
-            else reader.BaseStream.Position = Header.pAnimationInfo;
+            if (Header.AnimationInfo != 0x1C)
+                Trace.WriteLine("Header doesn't point to Block 1 being at 0x1C.");
+            reader.BaseStream.Seek(Header.AnimationInfo, SeekOrigin.Begin);
 
             AnimationInfo = new AnimationInfo(reader);
-            Console.WriteLine("Frame Count: " + AnimationInfo.frameCount);
+            Trace.WriteLine("Info Entry Count: " + AnimationInfo.EntryCount);
 
-            reader.BaseStream.Position = Header.pAnimationMappings;
-            AnimationMappings = new AnimationMappings(this, reader);
+            reader.BaseStream.Seek(Header.AnimationMappings, SeekOrigin.Begin);
+            AnimationMappings = new AnimationMappings(reader);
 
-            //Extract frames using AnimationMappings.
-            AnimationFrames = new AnimationFrame[AnimationMappings.mappings.Length];
+            if (AnimationMappings.Mappings.Length != AnimationInfo.EntryCount)
+            {
+                Trace.WriteLine("Calculated mapping count doesn't match header's entry count.");
+                Trace.WriteLine($"Entry Count: {AnimationInfo.EntryCount}, Calculated Count: {AnimationMappings.Mappings.Length}");
+            }
+
+            // Extract frames using AnimationMappings.
+            AnimationFrames = new AnimationFrames[AnimationMappings.Mappings.Length];
             for (int i = 0; i < AnimationFrames.Length; i++)
             {
-                reader.BaseStream.Position = Header.pFrames + AnimationMappings.mappings[i].frameOffset - 4;
-                AnimationFrames[i] = new AnimationFrame(this, reader);
+                reader.BaseStream.Seek(Header.AnimationFrames + AnimationMappings.Mappings[i].FrameOffset, SeekOrigin.Begin);
+                AnimationFrames[i] = new AnimationFrames(this, reader);
             }
         }
     }

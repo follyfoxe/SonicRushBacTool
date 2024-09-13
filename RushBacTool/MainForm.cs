@@ -1,18 +1,26 @@
 ﻿using RushBacLib;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Windows.Forms;
 
 namespace RushBacTool
 {
     public partial class MainForm : Form
     {
-        public BacFile bacFile;
-        public Bitmap[][] bitmaps;
-        string fileName;
+        public BacFile BacFile { get; private set; }
+        public FrameCache FrameCache { get; private set; }
+
+        readonly string _baseTitle;
+        string _openedFileName;
+
+        public MainForm()
+        {
+            Trace.WriteLine($"Sonic Rush Bac Tool v{Application.ProductVersion}\n");
+            InitializeComponent();
+
+            _baseTitle = Text;
+            ResetControls();
+
+            Disposed += OnDisposed;
+        }
 
         public MainForm(string[] args) : this()
         {
@@ -20,150 +28,148 @@ namespace RushBacTool
                 LoadBac(args[0]);
         }
 
-        public MainForm()
-        {
-            InitializeComponent();
-            Disposed += OnDisposed;
-        }
-
         void OnDisposed(object sender, EventArgs e)
         {
-            DisposeBitmaps();
+            FrameCache?.ClearCache();
+            FrameCache = null;
         }
 
         void LoadBac(string path)
         {
+            _openedFileName = Path.GetFileName(path);
+            Text = $"{_baseTitle} [{_openedFileName}]";
+
             ResetControls();
-            DisposeBitmaps();
+            FrameCache?.ClearCache();
 
-            fileName = Path.GetFileName(path);
-            Text = $"Rush Bac Tool [{fileName}]";
+            Trace.WriteLine($"Begin load {_openedFileName}");
+            Stopwatch sw = Stopwatch.StartNew();
 
-            Console.WriteLine("Begin load BAC {0}", fileName);
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            bacFile = new BacFile(path);
-            stopwatch.Stop();
-            Console.WriteLine("Finished loading BAC in {0} ms.\n", stopwatch.ElapsedMilliseconds);
-
-            CacheBitmaps();
+            BacFile = new BacFile(path);
+            FrameCache = new FrameCache(BacFile);
             CreateTree();
+
+            sw.Stop();
+            Trace.WriteLine($"Finished loading in {sw.ElapsedMilliseconds} ms.\n");
         }
 
         void ExportAll(string path)
         {
-            Console.WriteLine("Begin Export All {0}", fileName);
-            Stopwatch stopwatch = Stopwatch.StartNew();
+            ResetControls();
+            FrameCache?.ClearCache();
 
+            Trace.WriteLine($"Begin export all {_openedFileName}");
+            Stopwatch sw = Stopwatch.StartNew();
             Directory.CreateDirectory(path);
 
-            for (int i = 0; i < bitmaps.Length; i++)
+            for (int i = 0; i < FrameCache.AnimationCount; i++)
             {
-                Bitmap[] frames = bitmaps[i];
-
                 string dir = Path.Combine(path, "Animation " + i);
                 Directory.CreateDirectory(dir);
 
-                for (int j = 0; j < frames.Length; j++)
-                    frames[j].Save(Path.Combine(dir, "Frame " + j + ".png"));
+                for (int j = 0; j < FrameCache.GetFrameCount(i); j++)
+                    FrameCache.GetImage(i, j).Save(Path.Combine(dir, "Frame " + j + ".png"));
             }
 
-            stopwatch.Stop();
-            Console.WriteLine("Finished Exporting in {0} ms.\n", stopwatch.ElapsedMilliseconds);
-
-            MessageBox.Show("Export Finished!");
+            sw.Stop();
+            Trace.WriteLine($"Finished exporting in {sw.ElapsedMilliseconds} ms.\n");
+            MessageBox.Show("Successfully exported to " + path, "Export");
         }
 
         void ResetControls()
         {
+            selectionLabel.Text = "(Nothing)";
             treeView.Nodes.Clear();
-            foreach (Control c in propGroup.Controls)
+            Inspect(null);
+        }
+
+        void Inspect(object target)
+        {
+            foreach (Control c in propertyGroup.Controls)
                 c.Dispose();
-            propGroup.Controls.Clear();
+            propertyGroup.Controls.Clear();
+
+            Control control;
+            switch (target)
+            {
+                case null:
+                    return;
+                case Control c:
+                    control = c;
+                    break;
+                case int i:
+                    control = new AnimationControl(FrameCache, i);
+                    break;
+                case (int i, int j):
+                    control = new FrameControl(FrameCache, i, j);
+                    break;
+                default:
+                    control = new PropertyGrid() { SelectedObject = target, PropertySort = PropertySort.Categorized };
+                    break;
+            }
+            control.Dock = DockStyle.Fill;
+            propertyGroup.Controls.Add(control);
         }
 
         void CreateTree()
         {
             treeView.BeginUpdate();
-
-            TreeNode root = new TreeNode { Text = fileName, Tag = "ROOT" };
-
-            for (int i = 0; i < bacFile.AnimationFrames.Length; i++)
+            TreeNode root = new() { Text = _openedFileName, Tag = BacFile };
+            for (int i = 0; i < BacFile.AnimationFrames.Length; i++)
             {
-                AnimationFrame animFrame = bacFile.AnimationFrames[i];
-                TreeNode anim = new TreeNode { Text = "Animation Frame " + i, Tag = animFrame };
-
-                for (int j = 0; j < animFrame.frames.Count; j++)
+                AnimationFrames animation = BacFile.AnimationFrames[i];
+                TreeNode animNode = new()
                 {
-                    Frame frame = animFrame.frames[j];
-                    TreeNode node = new TreeNode { Text = "Frame " + j, Tag = new KeyValuePair<int, Frame>(i, frame) };
-                    anim.Nodes.Add(node);
+                    Text = $"Animation {i} - Size {animation.Frames.Count}",
+                    Tag = i
+                };
+                for (int j = 0; j < animation.Frames.Count; j++)
+                {
+                    animNode.Nodes.Add(new TreeNode()
+                    {
+                        Text = "Frame " + j,
+                        Tag = (i, j)
+                    });
                 }
-                root.Nodes.Add(anim);
+                root.Nodes.Add(animNode);
             }
 
             root.Expand();
             treeView.Nodes.Add(root);
+            treeView.SelectedNode = root;
             treeView.EndUpdate();
         }
 
         void TreeView_AfterSelect(object sender, TreeViewEventArgs e)
         {
-            propGroup.Controls.Clear();
-            TreeNode node = e.Node;
-
-            if (node.Tag is KeyValuePair<int, Frame> framePair)
-            {
-                FrameControl c = new FrameControl(this, framePair.Key, node.Index);
-                propGroup.Controls.Add(c);
-            }
-            if (node.Tag is AnimationFrame)
-            {
-                AnimFrameControl c = new AnimFrameControl(this, node.Index);
-                propGroup.Controls.Add(c);
-            }
-        }
-
-        void CacheBitmaps()
-        {
-            bitmaps = new Bitmap[bacFile.AnimationFrames.Length][];
-            for (int i = 0; i < bitmaps.Length; i++)
-            {
-                AnimationFrame anim = bacFile.AnimationFrames[i];
-                Bitmap[] frames = new Bitmap[anim.frames.Count];
-                for (int j = 0; j < frames.Length; j++)
-                    frames[j] = anim.frames[j].GetBitmap();
-                bitmaps[i] = frames;
-            }
-        }
-
-        void DisposeBitmaps()
-        {
-            if (bitmaps == null) return;
-            foreach (Bitmap[] frames in bitmaps)
-                foreach (Bitmap b in frames)
-                    b.Dispose();
-            bitmaps = null;
+            selectionLabel.Text = e.Node.Text;
+            Inspect(e.Node.Tag);
         }
 
         void OpenToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            using (OpenFileDialog dialog = new OpenFileDialog { Filter = "Bac Files (*.bac)|*.bac" })
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                    LoadBac(dialog.FileName);
-            }
+            using OpenFileDialog dialog = new() { Filter = "Bac Files (*.bac)|*.bac" };
+            if (dialog.ShowDialog() == DialogResult.OK)
+                LoadBac(dialog.FileName);
         }
 
         void ExportAllToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (bacFile == null)
+            if (BacFile == null)
                 return;
-
-            using (SaveFileDialog dialog = new SaveFileDialog { Title = "Select an output Folder.", FileName = "out" })
+            using FolderBrowserDialog dialog = new()
             {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                    ExportAll(dialog.FileName);
-            }
+                Description = "Select an output folder",
+                UseDescriptionForTitle = true,
+                AutoUpgradeEnabled = true
+            };
+            if (dialog.ShowDialog() == DialogResult.OK)
+                ExportAll(dialog.SelectedPath);
+        }
+
+        void ExitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Close();
         }
     }
 }
